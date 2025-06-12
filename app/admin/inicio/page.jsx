@@ -2,19 +2,14 @@
 import { getSessionFromCookies } from "@/lib/auth";
 import { cookies } from "next/headers";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 
 export default async function AdminInicioPage() {
-  const cookiesInstance = await cookies();
+  const cookiesInstance = cookies();
   const session = getSessionFromCookies(cookiesInstance);
 
   if (!session || !["admin", "superadmin"].includes(session.role)) {
-    return (
-      <html>
-        <head>
-          <meta httpEquiv="refresh" content="0;url=/admin/login" />
-        </head>
-      </html>
-    );
+    redirect("/admin/login");
   }
 
   // Simple logout POST handler to clear session cookie

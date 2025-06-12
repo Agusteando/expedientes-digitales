@@ -3,14 +3,15 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { ArrowRightEndOnRectangleIcon, XCircleIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowRightEndOnRectangleIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
+import { useRouter } from "next/navigation";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");     // short user facing error
-  const [detail, setDetail] = useState(null); // API error data for dev/help
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
+  const router = useRouter();
 
   function handleChange(e) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -20,7 +21,6 @@ export default function Login() {
     e.preventDefault();
     setPending(true);
     setError("");
-    setDetail(null);
     setSuccess(null);
 
     let resp, result;
@@ -30,19 +30,10 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-    } catch (err) {
-      setError("No se pudo contactar backend.");
-      setDetail({ network: String(err) });
-      setPending(false);
-      return;
-    }
-
-    try {
       result = await resp.json();
-    } catch (err) {
-      setError("Respuesta inválida del servidor.");
-      setDetail({ decode: String(err) });
+    } catch {
       setPending(false);
+      setError("No se pudo contactar el servidor.");
       return;
     }
 
@@ -50,11 +41,13 @@ export default function Login() {
 
     if (!resp.ok || !result.ok) {
       setError(result.error || "Error desconocido.");
-      setDetail(result);
       return;
     }
-    setSuccess("Inicio de sesión exitoso. Usuario " + (result.user?.email || result.user?.name || ""));
-    setDetail(result);
+    setSuccess("Inicio de sesión exitoso.");
+    // Redirect to dashboard after login
+    setTimeout(() => {
+      router.replace("/dashboard");
+    }, 600);
   }
 
   return (
@@ -107,14 +100,6 @@ export default function Login() {
             </div>
           }
         </form>
-        {detail &&
-          <div className="w-full mt-2 text-xs">
-            <div className="my-2 bg-slate-100 dark:bg-slate-800 p-2 font-mono rounded break-words">
-              <div className="font-bold">Respuesta de servidor:</div>
-              {JSON.stringify(detail, null, 2)}
-            </div>
-          </div>
-        }
         <div className="w-full text-right pt-2 text-xs text-slate-600 dark:text-slate-400">
           ¿Aún no te registras?{" "}
           <a href="/register" className="text-cyan-700 dark:text-cyan-300 underline font-bold">
