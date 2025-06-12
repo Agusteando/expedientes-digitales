@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  EMPLOYEE
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  picture        String?
+  role           Role            @default(EMPLOYEE)
+  isActive       Boolean         @default(true)
+  plantelId      String? // nullable for SuperAdmins
+  plantel        Plantel?        @relation(fields: [plantelId], references: [id])
+  createdAt      DateTime        @default(now())
+  documents      Document[]
+  checklistItems ChecklistItem[]
+  signatures     Signature[]
+}
+
+model Plantel {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  users     User[]
+  documents Document[]
+}
+
+model Document {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  plantelId     String
+  plantel       Plantel         @relation(fields: [plantelId], references: [id])
+  type          String
+  status        String          @default("PENDING")
+  filePath      String
+  uploadedAt    DateTime        @default(now())
+  ChecklistItem ChecklistItem[]
+}
+
+model ChecklistItem {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  documentId String? // optional, assigned post-upload
+  document   Document? @relation(fields: [documentId], references: [id])
+  type       String
+  required   Boolean   @default(true)
+  fulfilled  Boolean   @default(false)
+}
+
+model Signature {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  type       String // "simple", "advanced"
+  status     String // "pending", "signed", "failed"
+  signedAt   DateTime?
+  mifielData Json?
+  createdAt  DateTime  @default(now())
+}
