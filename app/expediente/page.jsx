@@ -4,30 +4,24 @@ import { getSessionFromCookies } from "@/lib/auth";
 import EmployeeOnboardingWizard from "@/components/EmployeeOnboardingWizard";
 import { cookies } from "next/headers";
 
-// Server component: parent fetches user/checklist and full status, passes as props
-export default async function DashboardPage({ searchParams }) {
+// Nueva ruta de expediente para empleados/candidatos
+export default async function ExpedientePage() {
   const cookiesInstance = await cookies();
-
-  // 1. Auth: Must be logged in as employee
   const session = getSessionFromCookies(cookiesInstance);
-  if (!session || session.role !== "employee") {
-    // SSR redirect if not in portal
-    if (typeof window === "undefined") {
-      return (
-        <html>
-          <head>
-            <meta httpEquiv="refresh" content="0;url=/login" />
-          </head>
-        </html>
-      );
-    }
-    if (typeof window !== "undefined") window.location.replace("/login");
-    return null;
+
+  // SSR: Solo empleados/candidatos pueden pasar
+  if (!session || !(["employee", "candidate"].includes(session.role))) {
+    return (
+      <html>
+        <head>
+          <meta httpEquiv="refresh" content="0;url=/login" />
+        </head>
+      </html>
+    );
   }
 
-  // 2. Fetch the onboarding checklist, existing documents, and signatures for this user
-  const userId = session.id;
-  const onboardingSteps = [
+  // Pasos del expediente (ajusta orden/nombres según tus docs oficiales)
+  const pasosExpediente = [
     {
       key: "ine",
       label: "Identificación Oficial (INE/IFE)",
@@ -36,60 +30,56 @@ export default async function DashboardPage({ searchParams }) {
     {
       key: "comprobante_domicilio",
       label: "Comprobante de Domicilio",
-      description: "Ejemplo: recibo de luz, agua, teléfono, vigente.",
+      description: "Recibo de luz, agua, teléfono, vigente.",
     },
     {
       key: "curp",
       label: "CURP",
-      description: "Sube tu CURP digital.",
+      description: "Carga tu CURP digital.",
     },
     {
       key: "cv",
       label: "Currículum Vitae",
-      description: "Tu CV actualizado en PDF.",
+      description: "Tu CV en PDF actualizado.",
     },
     {
       key: "rfc",
       label: "RFC (SAT)",
-      description: "Constancia de RFC, descargada del SAT.",
+      description: "Descarga tu constancia de RFC del SAT.",
     },
     {
       key: "acta_nacimiento",
       label: "Acta de Nacimiento",
-      description: "Acta de nacimiento reciente.",
+      description: "Sube tu acta de nacimiento.",
     },
-    {
+    { // SIGNABLE
       key: "contract",
       label: "Contrato Laboral",
-      description: "Descarga, revisa, sube y firma digitalmente tu contrato.",
+      description: "Descarga, revisa y firma digitalmente tu contrato.",
       signable: true,
     },
     {
       key: "reglamento",
       label: "Reglamento Interno",
-      description: "Descarga, revisa, sube y firma digitalmente el reglamento interno.",
+      description: "Lee, sube y firma digitalmente el reglamento interno.",
       signable: true,
     },
   ];
 
-  // b) Get all checklist item progress for user (indexed for quick lookup)
+  // Progreso y documentos previos
+  const userId = session.id;
   const checklistItems = await prisma.checklistItem.findMany({
     where: { userId },
-    include: {
-      document: true,
-    },
+    include: { document: true },
     orderBy: [{ type: "asc" }, { createdAt: "asc" }],
   });
-
-  // c) Get all signatures for the user (contract/reglamento)
   const signatures = await prisma.signature.findMany({
     where: { userId },
     orderBy: [{ createdAt: "desc" }],
   });
 
-  // d) Prepare per-step status
   const stepStatus = {};
-  for (let s of onboardingSteps) {
+  for (let s of pasosExpediente) {
     stepStatus[s.key] = {
       checklist: checklistItems.find(c => c.type === s.key),
       document: checklistItems.find(c => c.type === s.key)?.document || null,
@@ -103,7 +93,7 @@ export default async function DashboardPage({ searchParams }) {
   return (
     <EmployeeOnboardingWizard
       user={session}
-      steps={onboardingSteps}
+      steps={pasosExpediente}
       stepStatus={stepStatus}
     />
   );

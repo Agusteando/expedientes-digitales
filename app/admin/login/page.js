@@ -11,7 +11,6 @@ const GSI_CLIENT_ID = process.env.NEXT_PUBLIC_GSI_CLIENT_ID;
 export default function AdminLogin() {
   const router = useRouter();
 
-  // Google Sign-In handler
   useEffect(() => {
     function handleCredentialResponse(response) {
       if (!response || !response.credential) {
@@ -24,19 +23,19 @@ export default function AdminLogin() {
         body: JSON.stringify({ credential: response.credential }),
       })
         .then(async (res) => {
+          const data = await res.json();
           if (!res.ok) {
-            const data = await res.json();
             alert(data.error || "Acceso denegado");
             return;
           }
-          router.replace("/admin/dashboard");
+          // REDIRIGE SOLO A ADMIN INICIO!
+          router.replace("/admin/inicio");
         })
         .catch(() => {
           alert("Error de red");
         });
     }
 
-    // Only add GIS script if not already present
     if (!window.google?.accounts?.id) {
       const script = document.createElement("script");
       script.src = "https://accounts.google.com/gsi/client?hl=es";
@@ -44,7 +43,6 @@ export default function AdminLogin() {
       script.defer = true;
       script.onload = initializeGIS;
       document.body.appendChild(script);
-      // init will happen in script.onload
     } else {
       initializeGIS();
     }
@@ -77,7 +75,6 @@ export default function AdminLogin() {
       document.body.appendChild(flag);
     }
 
-    // Cleanup embedded script and flag on unmount
     return () => {
       const flag = document.getElementById("g_id_signin_initialized");
       if (flag) flag.remove();
@@ -106,7 +103,6 @@ export default function AdminLogin() {
           Solo personal autorizado <br />
           Ingresa con Google usando tu <b>correo institucional</b>
         </p>
-        {/* GIS button placeholder */}
         <div id="g_id_signin" className="mb-3" style={{ width: 260 }} />
       </div>
     </div>
