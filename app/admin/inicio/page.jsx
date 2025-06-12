@@ -17,8 +17,40 @@ export default async function AdminInicioPage() {
     );
   }
 
+  // Simple logout POST handler to clear session cookie
+  const nav = (
+    <nav className="w-full flex items-center justify-between px-7 py-3 bg-white/95 dark:bg-slate-900/95 border-b border-purple-100 dark:border-purple-800 fixed top-0 left-0 z-30">
+      <a href="/" className="font-bold text-xl text-purple-800 dark:text-purple-200" style={{ fontFamily: "var(--font-fredoka),var(--font-montserrat),sans-serif" }}>
+        Expedientes Digitales | Admin
+      </a>
+      <div className="flex items-center gap-3">
+        <span className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-semibold">
+          {session.name}
+        </span>
+        <form
+          action="/api/auth/logout"
+          method="POST"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await fetch("/api/auth/logout", { method: "POST" });
+            window.location.href = "/";
+          }}
+        >
+          <button
+            type="submit"
+            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-full text-xs shadow transition"
+            title="Cerrar sesión"
+          >
+            Cerrar sesión
+          </button>
+        </form>
+      </div>
+    </nav>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-10">
+    <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24">
+      {nav}
       <div className="w-full max-w-2xl bg-white/80 shadow-lg rounded-3xl p-8 mt-6 border border-purple-200 flex flex-col items-center gap-4">
         <Image
           src="/IMAGOTIPO-IECS-IEDIS.png"

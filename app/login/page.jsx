@@ -34,8 +34,6 @@ export default function Login() {
       setError(res.error || "Email/contraseña incorrectos.");
       return;
     }
-    // Next: get session user to check role and redirect
-    // Credits: we must reload so session is available SSR.
     window.location.href = "/expediente";
   }
 
