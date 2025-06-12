@@ -1,4 +1,3 @@
-
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -33,17 +32,15 @@ async function main() {
         email: 'desarrollo.tecnologico@casitaiedis.edu.mx',
         name: 'Desarrollo Tecnológico',
         picture: '',
-        role: 'SUPERADMIN',
-        isActive: true,
-        plantelId: null
+        role: 'superadmin',
+        isActive: true
       },
       {
         email: 'coord.admon@casitaiedis.edu.mx',
         name: 'Coordinación Administrativa',
         picture: '',
-        role: 'SUPERADMIN',
-        isActive: true,
-        plantelId: null
+        role: 'superadmin',
+        isActive: true
       }
     ],
     skipDuplicates: true
@@ -57,13 +54,13 @@ async function main() {
       email: 'admin.central@casitaiedis.edu.mx',
       name: 'Admin Central',
       picture: '',
-      role: 'ADMIN',
-      isActive: true,
-      plantelId: plantel.id
+      role: 'admin',
+      plantelId: plantel.id,
+      isActive: true
     }
   });
 
-  // Seed Dummy Employee with full checklist
+  // Seed Dummy Employee
   const employee = await prisma.user.upsert({
     where: { email: 'juan.perez@casitaiedis.edu.mx' },
     update: {},
@@ -71,23 +68,25 @@ async function main() {
       email: 'juan.perez@casitaiedis.edu.mx',
       name: 'Juan Pérez',
       picture: '',
-      role: 'EMPLOYEE',
-      isActive: true,
-      plantelId: plantel.id
+      role: 'employee',
+      plantelId: plantel.id,
+      isActive: true
     }
   });
 
+  // Seed checklist items for employee
   for (const type of checklistTypes) {
     await prisma.checklistItem.create({
       data: {
         userId: employee.id,
         type: type,
-        required: true
+        required: true,
+        fulfilled: false
       }
     });
   }
 
-  console.log("✅ Seed complete: 2 superadmins, 1 admin, 1 employee, 11 checklist items.");
+  console.log("✅ Seed complete: 2 superadmins, 1 admin, 1 employee, checklist items created.");
 }
 
 main()
@@ -95,4 +94,6 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
