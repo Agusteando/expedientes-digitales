@@ -4,6 +4,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { ArrowRightEndOnRectangleIcon } from "@heroicons/react/24/solid";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function Login() {
@@ -20,23 +21,22 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setLoading(false);
-    const data = await res.json();
-    if (!res.ok) return setError(data.error || "Email/contraseña incorrectos.");
 
-    // REDIRIGE POR ROL
-    if (data.user?.role === "employee" || data.user?.role === "candidate") {
-      router.replace("/expediente");
-    } else if (data.user?.role === "admin" || data.user?.role === "superadmin") {
-      router.replace("/admin/inicio");
-    } else {
-      router.replace("/");
+    // NextAuth - credentials provider classic login
+    const res = await signIn("credentials", {
+      redirect: false,
+      email: form.email,
+      password: form.password,
+    });
+
+    setLoading(false);
+    if (!res.ok) {
+      setError(res.error || "Email/contraseña incorrectos.");
+      return;
     }
+    // Next: get session user to check role and redirect
+    // Credits: we must reload so session is available SSR.
+    window.location.href = "/expediente";
   }
 
   return (

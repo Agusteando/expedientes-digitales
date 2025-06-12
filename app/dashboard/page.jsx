@@ -1,32 +1,24 @@
 
 import prisma from "@/lib/prisma";
-import { getSessionFromCookies } from "@/lib/auth";
 import EmployeeOnboardingWizard from "@/components/EmployeeOnboardingWizard";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/api/auth/[...nextauth]/route";
 
 // Server component: parent fetches user/checklist and full status, passes as props
 export default async function DashboardPage({ searchParams }) {
-  const cookiesInstance = await cookies();
+  const session = await getServerSession(authOptions);
 
-  // 1. Auth: Must be logged in as employee
-  const session = getSessionFromCookies(cookiesInstance);
-  if (!session || session.role !== "employee") {
-    // SSR redirect if not in portal
-    if (typeof window === "undefined") {
-      return (
-        <html>
-          <head>
-            <meta httpEquiv="refresh" content="0;url=/login" />
-          </head>
-        </html>
-      );
-    }
-    if (typeof window !== "undefined") window.location.replace("/login");
-    return null;
+  if (!session || !session.user || !["employee", "candidate"].includes(session.user.role)) {
+    return (
+      <html>
+        <head>
+          <meta httpEquiv="refresh" content="0;url=/login" />
+        </head>
+      </html>
+    );
   }
 
-  // 2. Fetch the onboarding checklist, existing documents, and signatures for this user
-  const userId = session.id;
+  const userId = session.user.id;
   const onboardingSteps = [
     {
       key: "ine",
@@ -72,7 +64,6 @@ export default async function DashboardPage({ searchParams }) {
     },
   ];
 
-  // b) Get all checklist item progress for user (indexed for quick lookup)
   const checklistItems = await prisma.checklistItem.findMany({
     where: { userId },
     include: {
@@ -81,13 +72,11 @@ export default async function DashboardPage({ searchParams }) {
     orderBy: [{ type: "asc" }, { createdAt: "asc" }],
   });
 
-  // c) Get all signatures for the user (contract/reglamento)
   const signatures = await prisma.signature.findMany({
     where: { userId },
     orderBy: [{ createdAt: "desc" }],
   });
 
-  // d) Prepare per-step status
   const stepStatus = {};
   for (let s of onboardingSteps) {
     stepStatus[s.key] = {
@@ -102,7 +91,7 @@ export default async function DashboardPage({ searchParams }) {
 
   return (
     <EmployeeOnboardingWizard
-      user={session}
+      user={session.user}
       steps={onboardingSteps}
       stepStatus={stepStatus}
     />

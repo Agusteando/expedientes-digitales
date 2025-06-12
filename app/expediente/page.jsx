@@ -1,16 +1,14 @@
 
 import prisma from "@/lib/prisma";
-import { getSessionFromCookies } from "@/lib/auth";
 import EmployeeOnboardingWizard from "@/components/EmployeeOnboardingWizard";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/api/auth/[...nextauth]/route";
 
 // Nueva ruta de expediente para empleados/candidatos
 export default async function ExpedientePage() {
-  const cookiesInstance = await cookies();
-  const session = getSessionFromCookies(cookiesInstance);
+  const session = await getServerSession(authOptions);
 
-  // SSR: Solo empleados/candidatos pueden pasar
-  if (!session || !(["employee", "candidate"].includes(session.role))) {
+  if (!session || !session.user || !["employee", "candidate"].includes(session.user.role)) {
     return (
       <html>
         <head>
@@ -66,8 +64,7 @@ export default async function ExpedientePage() {
     },
   ];
 
-  // Progreso y documentos previos
-  const userId = session.id;
+  const userId = session.user.id;
   const checklistItems = await prisma.checklistItem.findMany({
     where: { userId },
     include: { document: true },
@@ -92,7 +89,7 @@ export default async function ExpedientePage() {
 
   return (
     <EmployeeOnboardingWizard
-      user={session}
+      user={session.user}
       steps={pasosExpediente}
       stepStatus={stepStatus}
     />
