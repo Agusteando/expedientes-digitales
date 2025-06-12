@@ -16,7 +16,7 @@ const fredoka = Fredoka({
 });
 
 export const metadata = {
-  title: "Expedientes Digitales | Casita IEDIS",
+  title: "Expedientes Digitales | IECS-IEDIS",
   description: "Plataforma para administrar expedientes laborales y firmas digitales con MiFiel.",
 };
 

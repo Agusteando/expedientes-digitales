@@ -13,7 +13,7 @@ export default function Home() {
         <div className="relative w-24 h-24 md:w-32 md:h-32 mb-5 px-2">
           <Image
             src="/IMAGOTIPO-IECS-IEDIS.png"
-            alt="Casita IEDIS"
+            alt="IECS-IEDIS"
             fill
             priority
             className="object-contain rounded-2xl shadow-xl bg-white/80 backdrop-blur-sm"
@@ -26,7 +26,7 @@ export default function Home() {
           Expedientes Digitales
         </h1>
         <p className="text-base xs:text-lg sm:text-xl text-slate-700 dark:text-slate-200 max-w-lg text-center mb-0 font-bold">
-          Plataforma interna de Casita IEDIS <br className="hidden xs:block" />
+          Plataforma interna de IECS-IEDIS <br className="hidden xs:block" />
           <span className="inline bg-gradient-to-r from-purple-700 via-fuchsia-600 to-teal-600 dark:from-fuchsia-300 dark:via-teal-400 dark:to-cyan-300 bg-clip-text text-transparent font-extrabold">
             Sube tu expediente y firma digitalmente
           </span>
@@ -100,7 +100,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="flex flex-col items-center gap-1 py-8 text-xs text-slate-600 dark:text-slate-400 font-bold" style={{ fontFamily: "var(--font-montserrat), sans-serif" }}>
         <span>
-          © {new Date().getFullYear()} Casita IEDIS. Todos los derechos reservados. 
+          © {new Date().getFullYear()} IECS-IEDIS. Todos los derechos reservados. 
         </span>
         <span className="flex items-center gap-1">
           Desarrollado por{" "}
@@ -108,7 +108,7 @@ export default function Home() {
             href="mailto:desarrollo.tecnologico@casitaiedis.edu.mx"
             className="underline decoration-dashed text-purple-700 dark:text-purple-300"
           >
-            Casita IEDIS
+            IECS-IEDIS
           </a>
         </span>
       </footer>
