@@ -1,0 +1,85 @@
+
+export const stepsExpediente = [
+  {
+    key: "identificacion_oficial",
+    iconKey: "IdentificationIcon",
+    label: "Identificación Oficial",
+    description: "Adjunta una imagen legible o PDF de tu INE, pasaporte o cédula profesional.",
+  },
+  {
+    key: "curp",
+    iconKey: "DocumentTextIcon",
+    label: "CURP",
+    description: "Adjunta tu CURP oficial digital, emitida por el gobierno.",
+  },
+  {
+    key: "rfc",
+    iconKey: "BriefcaseIcon",
+    label: "RFC",
+    description: "Súbenos tu constancia de RFC descargada del SAT.",
+  },
+  {
+    key: "nss",
+    iconKey: "ShieldCheckIcon",
+    label: "NSS",
+    description: "Adjunta tu comprobante vigente de número de seguridad social (IMSS).",
+  },
+  {
+    key: "acta_nacimiento",
+    iconKey: "DocumentTextIcon",
+    label: "Acta de Nacimiento",
+    description: "Sube el PDF de tu acta de nacimiento.",
+  },
+  {
+    key: "comprobante_domicilio",
+    iconKey: "ReceiptRefundIcon",
+    label: "Comprobante de Domicilio",
+    description: "Adjunta un recibo reciente (agua, luz o teléfono), no mayor a 3 meses.",
+  },
+  {
+    key: "certificado_medico",
+    iconKey: "UserCircleIcon",
+    label: "Certificado Médico",
+    description: "Adjunta tu certificado de aptitud médica laboral más reciente.",
+  },
+  {
+    key: "titulo_profesional",
+    iconKey: "AcademicCapIcon",
+    label: "Título Profesional / Certificados",
+    description: "Sube tu título profesional o certificados de estudios.",
+  },
+  {
+    key: "carta_recomendacion",
+    iconKey: "UserGroupIcon",
+    label: "Cartas / Constancias Laborales",
+    description: "Adjunta cartas de recomendación o constancias laborales recientes.",
+  },
+  {
+    key: "fotografias",
+    iconKey: "UserPlusIcon",
+    label: "Fotografía Infantil",
+    description: "Adjunta una fotografía tamaño infantil, fondo blanco, reciente.",
+  },
+  {
+    key: "carta_no_penales",
+    iconKey: "CheckCircleIcon",
+    label: "Carta de No Penales",
+    description: "Sube tu carta de antecedentes no penales emitida por la autoridad.",
+  },
+  {
+    key: "reglamento",
+    iconKey: "BookOpenIcon",
+    label: "Reglamento Interno",
+    description: "Lee nuestro reglamento institucional y firma digitalmente para continuar.",
+    signable: true,
+    requiresUploads: true,
+  },
+  {
+    key: "contrato",
+    iconKey: "PencilSquareIcon",
+    label: "Contrato Laboral",
+    description: "Lee detenidamente tu contrato laboral y firma digitalmente con tu FIEL.",
+    signable: true,
+    requiresUploads: true,
+  },
+];

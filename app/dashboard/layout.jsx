@@ -1,0 +1,51 @@
+
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/nextauth-options";
+import Image from "next/image";
+import LogoutButton from "@/components/LogoutButton";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+export default async function DashboardLayout({ children }) {
+  const session = await getServerSession(authOptions);
+
+  if (
+    !session ||
+    !session.user ||
+    !["employee", "candidate"].includes(session.user.role)
+  ) {
+    redirect("/login");
+  }
+
+  const { user } = session;
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#f6eafe] via-[#e4f7fb] to-[#eafff7] dark:from-[#181e2a] dark:via-[#192736] dark:to-[#225245] flex flex-col">
+      <nav className="w-full bg-white/90 dark:bg-slate-900/90 border-b border-slate-100 dark:border-slate-800 py-2 px-2 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Link href="/" className="font-bold text-lg text-cyan-700 dark:text-cyan-200 hover:underline" style={{ fontFamily: "var(--font-fredoka), var(--font-montserrat)" }}>
+            Expedientes Digitales
+          </Link>
+        </div>
+        <div className="flex items-center gap-3 min-w-0 max-w-xs sm:max-w-full">
+          <Image
+            src={user.picture || "/IMAGOTIPO-IECS-IEDIS.png"}
+            alt={user.name || "Perfil"}
+            width={32}
+            height={32}
+            className="rounded-full bg-white border border-cyan-300 object-cover"
+            style={{ minWidth: 32, minHeight: 32, maxWidth: 32, maxHeight: 32 }}
+            priority
+          />
+          <span className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px] sm:max-w-[220px] text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-semibold" title={user.name}>
+            {user.name}
+          </span>
+          <LogoutButton className="ml-2" />
+        </div>
+      </nav>
+      <main className="flex-1 w-full flex flex-col items-center">
+        {children}
+      </main>
+    </div>
+  );
+}

@@ -1,10 +1,16 @@
 
 "use client";
 
+/**
+ * Clean NextAuth login for IECS-IEDIS employees/candidates.
+ * Uses signIn("credentials") from next-auth/react for proper cookie/session.
+ * Never posts directly to a custom /api/auth/login endpoint.
+ */
 import { useState } from "react";
 import Image from "next/image";
 import { ArrowRightEndOnRectangleIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -23,31 +29,27 @@ export default function Login() {
     setError("");
     setSuccess(null);
 
-    let resp, result;
     try {
-      resp = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      const result = await signIn("credentials", {
+        redirect: false,
+        email: form.email,
+        password: form.password,
       });
-      result = await resp.json();
-    } catch {
+
+      setPending(false);
+
+      if (!result.ok) {
+        setError(result.error || "Usuario o contraseña incorrectos.");
+        return;
+      }
+      setSuccess("Inicio de sesión exitoso.");
+      setTimeout(() => {
+        router.replace("/expediente");
+      }, 600);
+    } catch (err) {
       setPending(false);
       setError("No se pudo contactar el servidor.");
-      return;
     }
-
-    setPending(false);
-
-    if (!resp.ok || !result.ok) {
-      setError(result.error || "Error desconocido.");
-      return;
-    }
-    setSuccess("Inicio de sesión exitoso.");
-    // Redirect to dashboard after login
-    setTimeout(() => {
-      router.replace("/dashboard");
-    }, 600);
   }
 
   return (

@@ -1,5 +1,6 @@
 
 import prisma from "@/lib/prisma";
+import { stepsExpediente } from "@/components/stepMetaExpediente";
 import EmployeeOnboardingWizard from "@/components/EmployeeOnboardingWizard";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextauth-options";
@@ -11,65 +12,36 @@ export default async function ExpedientePage() {
     return null;
   }
 
-  // Pasos del expediente
-  const pasosExpediente = [
-    {
-      key: "ine",
-      label: "Identificación Oficial (INE/IFE)",
-      description: "Sube una copia de tu INE o IFE vigente.",
-    },
-    {
-      key: "comprobante_domicilio",
-      label: "Comprobante de Domicilio",
-      description: "Recibo de luz, agua, teléfono, vigente.",
-    },
-    {
-      key: "curp",
-      label: "CURP",
-      description: "Carga tu CURP digital.",
-    },
-    {
-      key: "cv",
-      label: "Currículum Vitae",
-      description: "Tu CV en PDF actualizado.",
-    },
-    {
-      key: "rfc",
-      label: "RFC (SAT)",
-      description: "Descarga tu constancia de RFC del SAT.",
-    },
-    {
-      key: "acta_nacimiento",
-      label: "Acta de Nacimiento",
-      description: "Sube tu acta de nacimiento.",
-    },
-    { // SIGNABLE
-      key: "contract",
-      label: "Contrato Laboral",
-      description: "Descarga, revisa y firma digitalmente tu contrato.",
-      signable: true,
-    },
-    {
-      key: "reglamento",
-      label: "Reglamento Interno",
-      description: "Lee, sube y firma digitalmente el reglamento interno.",
-      signable: true,
-    },
-  ];
-
   const userId = session.user.id;
-  const checklistItems = await prisma.checklistItem.findMany({
-    where: { userId },
-    include: { document: true },
-    orderBy: [{ type: "asc" }, { createdAt: "asc" }],
-  });
-  const signatures = await prisma.signature.findMany({
-    where: { userId },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  let checklistItems = [];
+  let signatures = [];
+
+  try {
+    checklistItems = await prisma.checklistItem.findMany({
+      where: { userId },
+      include: { document: true },
+      orderBy: [{ type: "asc" }],
+    });
+  } catch (err) {
+    console.error("[ExpedientePage] prisma.checklistItem.findMany failed:", err);
+    throw new Error(
+      "No se pudo leer los items del expediente. Si este error persiste, notifica a soporte. " +
+      (err && err.message ? err.message : "")
+    );
+  }
+
+  try {
+    signatures = await prisma.signature.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: "desc" }],
+    });
+  } catch (err) {
+    console.error("[ExpedientePage] prisma.signature.findMany failed:", err);
+    signatures = [];
+  }
 
   const stepStatus = {};
-  for (let s of pasosExpediente) {
+  for (let s of stepsExpediente) {
     stepStatus[s.key] = {
       checklist: checklistItems.find(c => c.type === s.key),
       document: checklistItems.find(c => c.type === s.key)?.document || null,
@@ -81,10 +53,13 @@ export default async function ExpedientePage() {
   }
 
   return (
-    <EmployeeOnboardingWizard
-      user={session.user}
-      steps={pasosExpediente}
-      stepStatus={stepStatus}
-    />
+    <div className="flex w-full min-h-[80vh] justify-center items-start px-0 sm:px-1 py-1">
+      <EmployeeOnboardingWizard
+        user={session.user}
+        steps={stepsExpediente}
+        stepStatus={stepStatus}
+        mode="expediente"
+      />
+    </div>
   );
 }
