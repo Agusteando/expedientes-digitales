@@ -54,7 +54,7 @@ function formatStatusIcon(status) {
   return <InformationCircleIcon className="text-gray-300 w-5 h-5 inline align-middle" />;
 }
 
-export default function EmployeeOnboardingWizard({ user, steps, stepStatus, stepHistory }) {
+export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -65,6 +65,36 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
   const [freshWidgetId, setFreshWidgetId] = useState("");
   const scrollerRef = useRef(null);
 
+  // Live wizard state
+  const [stepStatus, setStepStatus] = useState({});
+  const [stepHistory, setStepHistory] = useState({});
+  const [fetchError, setFetchError] = useState("");
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Always refetch data on mount or after upload
+  async function fetchExpedienteSteps() {
+    setLoadingData(true);
+    setFetchError("");
+    try {
+      const res = await fetch(`/api/expediente/steps/${user.id}`);
+      if (!res.ok) throw new Error("No se pudo leer los datos del expediente.");
+      const { stepHistory: history, stepStatus: status } = await res.json();
+      setStepHistory(history || {});
+      setStepStatus(status || {});
+    } catch (err) {
+      setFetchError(err.message || "Error de conexión.");
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchExpedienteSteps();
+    // eslint-disable-next-line
+  }, [user.id]);
+
+  const steps = stepsExpediente;
   const totalSteps = steps.length;
   const requiredUploadSteps = useMemo(
     () => steps.filter(s => !s.signable).map(s => s.key),
@@ -79,10 +109,11 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
 
   useEffect(() => {
     if (!uploadsComplete && steps[currentStep]?.signable) {
-      const idx = steps.findIndex(s => !s.signable && !stepStatus[s.key]?.checklist?.fulfilled);
+      const idx = steps.findIndex(s => !s.signable && (!stepStatus[s.key]?.checklist?.fulfilled));
       if (idx !== -1) setCurrentStep(idx);
     }
-  }, [uploadsComplete, currentStep]);
+    // eslint-disable-next-line
+  }, [uploadsComplete, currentStep, stepStatus]);
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -108,7 +139,8 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
           setUploadError(data.error || "Error al subir el archivo.");
         } else {
           setUploadSuccess("¡Archivo subido! Esperando validación.");
-          setTimeout(() => window.location.reload(), 1000);
+          // Optimistically re-fetch the latest file list/histories
+          fetchExpedienteSteps();
         }
       } catch {
         setUploadError("Error al subir.");
@@ -144,6 +176,8 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
           setFreshWidgetId(data.widgetSigners[0].widget_id);
         }
         setSignatureStatus("Abre el widget y firma tu documento digital.");
+        // After sign init, refetch to get latest signature object/status
+        fetchExpedienteSteps();
       }
     } catch {
       setSignatureStatus("Error en la conexión para firmar.");
@@ -160,7 +194,14 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
     ) {
       setFreshWidgetId(stepStatus[step.key].signature.mifielMetadata.signers[0].widget_id);
     }
+    // eslint-disable-next-line
   }, [currentStep, steps, stepStatus]);
+
+  // Rerender after download/signature event (calls to MiFiel, etc.)
+  function handleWidgetSuccess() {
+    fetchExpedienteSteps();
+    setSignatureStatus("¡Documento firmado!");
+  }
 
   const stepper = useMemo(() =>
     <div className="relative w-full max-w-2xl px-2 overflow-visible z-20 pb-1">
@@ -197,7 +238,7 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
                 aria-label={`Paso: ${s.label}`}
                 type="button"
               >
-                {Icon && <Icon className="h-8 w-8 sm:h-9 sm:w-9" aria-hidden="true" />}
+                {Icon && <Icon className="h-8 w-8 sm:h-9 sm:w-9 align-middle" aria-hidden="true" />}
               </button>
             </li>
           );
@@ -206,11 +247,14 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
     </div>
   , [steps, currentStep, stepStatus, uploadsComplete, uploading]);
 
+  if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
+  if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
+
   const step = steps[currentStep];
   const status = stepStatus[step.key] || {};
   const { checklist, document, signature } = status;
 
-  // Historical versions from parent prop, newest first
+  // Historical versions from up-to-date fetch, newest first
   const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs[0] || null;
 
@@ -230,10 +274,7 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
-      {/* Sticky stepper */}
       <div className="w-full flex flex-col items-center sticky top-[56px] md:top-[60px] bg-transparent z-30">{stepper}</div>
-
-      {/* Main Glass Card */}
       <section className={wizardCard + " relative"}>
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
           <div className="w-14 h-14 relative mb-2">
@@ -266,7 +307,6 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
           </span>
         </div>
         <div className="flex-1 w-full px-0 flex flex-col gap-3 items-center mt-1 mb-1">
-          {/* Non-signable step, main/latest version */}
           {!step.signable ? (
             latestDoc ? (
               <div className="flex flex-col gap-2 items-center w-full">
@@ -285,14 +325,12 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
                     {latestDoc.status}
                   </span>
                 </div>
-                {/* Reviewer comment for current/latest version */}
                 {latestDoc.reviewComment && (
                   <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-xs text-fuchsia-900 mt-1 mb-1 shadow-sm max-w-xl w-full">
                     <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
                     <span className="break-words">{latestDoc.reviewComment}</span>
                   </div>
                 )}
-                {/* History Table */}
                 {historyDocs.length > 1 && (
                   <div className="w-full mt-3 px-1">
                     <div className="font-bold text-cyan-900 dark:text-cyan-100 mb-1 text-xs flex items-center gap-2">
@@ -310,7 +348,6 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
                               {doc.status}
                             </span>
                           </div>
-                          {/* Comment for previous version */}
                           {doc.reviewComment && (
                             <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
                               <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
@@ -322,7 +359,6 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
                     </div>
                   </div>
                 )}
-                {/* progress, status, and re-upload */}
                 <div className="w-full flex flex-col justify-center items-center mt-3">
                   <DocumentDropzone
                     loading={uploading}
@@ -373,7 +409,7 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
                       <MifielWidgetClient
                         widgetId={freshWidgetId || (signature?.mifielMetadata?.signers?.[0]?.widget_id)}
                         env="production"
-                        onSuccess={() => window.location.reload()}
+                        onSuccess={handleWidgetSuccess}
                         onError={(err) => setSignatureStatus("Error en la firma: " + (err?.message ?? err))}
                       />
                     </div>
@@ -417,7 +453,6 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus, step
             </div>
           )}
         </div>
-        {/* Nav bar: always visible, sticky, space for floating support */}
         <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[68px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
           <button
             className={secondaryButton + " min-w-[120px]"}
