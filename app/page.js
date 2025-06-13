@@ -2,116 +2,119 @@
 "use client";
 
 import Image from "next/image";
-import { ShieldCheckIcon, UserPlusIcon, ArrowRightIcon } from "@heroicons/react/24/solid";
 import Link from "next/link";
+import { UserPlusIcon, ShieldCheckIcon } from "@heroicons/react/24/solid";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-tr from-[#e0eaff] via-[#f6d3fa] to-[#d0fff6] dark:from-[#22253b] dark:via-[#3a3353] dark:to-[#174b3a] bg-fixed">
-      {/* Logo + Hero Section */}
-      <header className="mt-8 mb-4 flex flex-col items-center">
-        <div className="relative w-24 h-24 md:w-32 md:h-32 mb-5 px-2">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-tr from-[#ece9fc] via-[#f2f7ff] to-[#e4faea] dark:from-[#212139] dark:via-[#243047] dark:to-[#1a493a] bg-fixed overflow-x-hidden">
+      {/* Fixed nav brand for desktop, in-card for mobile */}
+      <nav className="hidden md:flex z-50 fixed top-0 left-0 w-full justify-center pointer-events-none select-none py-6">
+        <div className="flex gap-3 items-center bg-white/80 dark:bg-slate-900/90 px-7 py-3 rounded-2xl shadow-md border border-slate-100 dark:border-slate-800 pointer-events-auto">
           <Image
             src="/IMAGOTIPO-IECS-IEDIS.png"
             alt="IECS-IEDIS"
-            fill
+            width={38}
+            height={38}
             priority
-            className="object-contain rounded-2xl shadow-xl bg-white/80 backdrop-blur-sm"
+            className="rounded-xl bg-white object-contain"
+            style={{ boxShadow: "0 4px 18px 0 rgba(80,40,220,0.07)" }}
           />
-        </div>
-        <h1
-          className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-1 tracking-tight"
-          style={{ fontFamily: "var(--font-fredoka), var(--font-montserrat), sans-serif", letterSpacing: "-0.01em" }}
-        >
-          Expedientes Digitales
-        </h1>
-        <p className="text-base xs:text-lg sm:text-xl text-slate-700 dark:text-slate-200 max-w-lg text-center mb-0 font-bold">
-          Plataforma interna de IECS-IEDIS <br className="hidden xs:block" />
-          <span className="inline bg-gradient-to-r from-purple-700 via-fuchsia-600 to-teal-600 dark:from-fuchsia-300 dark:via-teal-400 dark:to-cyan-300 bg-clip-text text-transparent font-extrabold">
-            Sube tu expediente y firma digitalmente
+          <span className="font-fredoka font-bold text-lg xl:text-xl pl-1 text-purple-800 dark:text-fuchsia-200 tracking-tight">
+            IECS-IEDIS
           </span>
-        </p>
-      </header>
-      
-      {/* Login Options */}
-      <main className="flex-1 flex items-center justify-center">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-7 w-full max-w-3xl mx-auto px-4 sm:px-0">
-          {/* Admin Card */}
-          <div className="flex flex-col items-center justify-between bg-white/70 dark:bg-white/10 shadow-xl rounded-3xl p-7 sm:p-10 text-center border border-slate-200/60 dark:border-slate-700/50 transition hover:scale-[1.026] hover:shadow-2xl hover:ring-2 hover:ring-purple-300/50 dark:hover:ring-purple-500/40 backdrop-blur-md"
-            style={{
-              boxShadow:"0 4px 34px 0 rgba(109,40,217,0.06), 0 1.5px 7px 0 rgba(89,200,209,0.03)"
-            }}>
-            <ShieldCheckIcon className="h-11 w-11 mb-4 text-purple-700 dark:text-fuchsia-200 drop-shadow-md" aria-hidden="true" />
-            <h2
-              className="text-lg xs:text-xl font-bold mb-2 text-slate-800 dark:text-white"
-              style={{ fontFamily: "var(--font-fredoka), var(--font-montserrat), sans-serif" }}
-            >
-              Soy Administrador
-            </h2>
-            <p className="text-sm xs:text-base text-slate-700 dark:text-slate-300 mb-4 font-bold">
-              Acceso exclusivo <br className="sm:hidden" /> para personal administrativo autorizado.
+        </div>
+      </nav>
+
+      {/* Centered SaaS hero glass card */}
+      <main className="w-full flex flex-col items-center justify-center flex-1 py-10">
+        <div className="w-full max-w-[98vw] xs:max-w-[410px] md:max-w-xl lg:max-w-2xl mx-auto p-0 sm:p-0">
+          <section
+            className="relative flex flex-col items-center justify-center mx-auto
+                       bg-white/90 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800
+                       shadow-2xl rounded-3xl px-4 py-8 xs:px-8 sm:py-10 md:px-16
+                       mb-12 backdrop-blur-[12px]
+                       transition-all duration-200"
+            style={{ boxShadow: "0 6px 40px 0 rgba(120,60,180,0.14)" }}
+          >
+            {/* Logo–brand block: in card for mobile, hidden for desktop */}
+            <div className="md:hidden flex flex-col items-center mb-5 select-none">
+              <div className="relative w-16 h-16 xs:w-20 xs:h-20 mb-2">
+                <Image
+                  src="/IMAGOTIPO-IECS-IEDIS.png"
+                  alt="IECS-IEDIS"
+                  fill
+                  className="object-contain bg-white rounded-xl"
+                />
+              </div>
+              <span className="font-fredoka font-bold text-lg text-purple-800 dark:text-fuchsia-200 tracking-tight">
+                IECS-IEDIS
+              </span>
+            </div>
+
+            {/* Platform headline */}
+            <h1 className="font-fredoka text-2xl xs:text-3xl sm:text-4xl md:text-4xl text-center font-extrabold text-purple-900 dark:text-fuchsia-100 mb-2 tracking-tight select-none">
+              Expediente Laboral Digital
+            </h1>
+            {/* Subheadline */}
+            <p className="text-base xs:text-lg sm:text-xl font-semibold text-slate-700 dark:text-slate-200 text-center mb-7 max-w-lg px-2 select-none">
+              Acceso seguro para empleados y administración de IECS-IEDIS. Sube documentos y firma digitalmente tu contrato en un solo lugar.
             </p>
-            <Link
-              href="/admin/login"
-              className="group inline-flex items-center gap-2.5 px-5 py-3 rounded-full font-bold text-white bg-gradient-to-r from-purple-700 to-fuchsia-600 dark:from-fuchsia-400 dark:to-purple-500 shadow-lg transition hover:scale-105 hover:from-fuchsia-700 hover:to-purple-900 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 text-base w-full justify-center"
-              style={{ fontFamily: "var(--font-montserrat), sans-serif" }}
-            >
-              Ingresar Administrador
-              <ArrowRightIcon className="h-5 w-5 -mr-1 group-hover:translate-x-1 transition" />
-            </Link>
-          </div>
-          {/* Employee/Candidate Card */}
-          <div className="flex flex-col items-center justify-between bg-white/70 dark:bg-slate-900/80 shadow-xl rounded-3xl p-7 sm:p-10 text-center border border-teal-200/60 dark:border-teal-700/30 transition hover:scale-[1.026] hover:shadow-2xl hover:ring-2 hover:ring-teal-300/50 dark:hover:ring-teal-500/30 backdrop-blur-md"
-            style={{
-              boxShadow:"0 4px 34px 0 rgba(20,184,166,0.07), 0 1.5px 7px 0 rgba(8,145,178,0.025)"
-            }}>
-            <UserPlusIcon className="h-11 w-11 mb-4 text-teal-600 dark:text-teal-300 drop-shadow-md" aria-hidden="true" />
-            <h2
-              className="text-lg xs:text-xl font-bold mb-2 text-slate-800 dark:text-white"
-              style={{ fontFamily: "var(--font-fredoka), var(--font-montserrat), sans-serif" }}
-            >
-              Soy Empleado o Candidato
-            </h2>
-            <p className="text-sm xs:text-base text-slate-700 dark:text-slate-200 mb-4 font-bold">
-              Regístrate, sube tus documentos <br className="sm:hidden" /> y firme su contrato digital aquí.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 w-full justify-center mt-1">
+
+            {/* CTA buttons: always full width on mobile, side-by-side with gap on desktop */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-7">
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2.5 px-5 py-3 rounded-full font-bold text-white bg-gradient-to-r from-teal-600 to-cyan-500 shadow-lg transition hover:scale-105 hover:from-cyan-700 hover:to-teal-900 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-teal-400 text-base w-full justify-center"
+                className="
+                  group flex items-center justify-center w-full py-4 px-5 rounded-full
+                  bg-gradient-to-r from-teal-600 to-cyan-500
+                  text-white font-extrabold text-lg md:text-xl drop-shadow-lg
+                  focus:outline-none focus:ring-4 focus:ring-cyan-400
+                  shadow-lg hover:from-teal-800 hover:to-cyan-700
+                  transition min-h-[56px] min-w-0
+                "
                 style={{ fontFamily: "var(--font-montserrat), sans-serif" }}
               >
-                Iniciar Sesión
-                <ArrowRightIcon className="h-5 w-5 -mr-1" />
+                <UserPlusIcon className="w-7 h-7 sm:w-8 sm:h-8 mr-3 -ml-2" aria-hidden="true" />
+                <span>
+                  Soy Empleado/a o Candidato
+                </span>
               </Link>
               <Link
-                href="/register"
-                className="inline-flex items-center gap-2.5 px-5 py-3 rounded-full font-bold text-teal-700 dark:text-teal-200 bg-gradient-to-r from-white via-teal-50 to-white dark:from-slate-900 dark:via-slate-800/80 dark:to-slate-900 border border-teal-300 dark:border-teal-700 shadow-lg transition hover:scale-105 hover:bg-teal-50 dark:hover:bg-teal-900/80 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-teal-400 text-base w-full justify-center"
+                href="/admin/login"
+                className="
+                  group flex items-center justify-center w-full py-4 px-5 rounded-full
+                  bg-gradient-to-r from-fuchsia-700 to-purple-700
+                  text-white font-extrabold text-lg md:text-xl drop-shadow-lg
+                  focus:outline-none focus:ring-4 focus:ring-fuchsia-400
+                  shadow-lg hover:from-fuchsia-800 hover:to-purple-900
+                  transition min-h-[56px] min-w-0
+                "
                 style={{ fontFamily: "var(--font-montserrat), sans-serif" }}
               >
-                Registrarme
-                <ArrowRightIcon className="h-5 w-5 -mr-1" />
+                <ShieldCheckIcon className="w-7 h-7 sm:w-8 sm:h-8 mr-3 -ml-2" aria-hidden="true" />
+                <span>
+                  Soy Administrador/a
+                </span>
               </Link>
             </div>
-          </div>
+          </section>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="flex flex-col items-center gap-1 py-8 text-xs text-slate-600 dark:text-slate-400 font-bold" style={{ fontFamily: "var(--font-montserrat), sans-serif" }}>
-        <span>
-          © {new Date().getFullYear()} IECS-IEDIS. Todos los derechos reservados. 
-        </span>
-        <span className="flex items-center gap-1">
-          Desarrollado por{" "}
-          <a 
-            href="mailto:desarrollo.tecnologico@casitaiedis.edu.mx"
-            className="underline decoration-dashed text-purple-700 dark:text-purple-300"
-          >
-            IECS-IEDIS
-          </a>
-        </span>
-      </footer>
+      {/* Optional brand visual for desktop (hidden mobile) */}
+      <div className="hidden md:flex pointer-events-none fixed bottom-0 left-0 w-full items-end justify-center z-0 select-none">
+        <Image
+          src="/IMAGOTIPO-IECS-IEDIS.png"
+          alt=""
+          width={180}
+          height={38}
+          className="opacity-5 blur-[1.5px] mb-8"
+          draggable={false}
+          aria-hidden
+          style={{ pointerEvents: "none" }}
+        />
+      </div>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { stepsExpediente } from "./stepMetaExpediente";
 import { wizardCard, stepperButton, navigationButton, secondaryButton, mainButton } from "../lib/ui-classes";
 import dynamic from "next/dynamic";
 import DocumentDropzone from "./DocumentDropzone";
+import PdfViewer from "./PdfViewer";
 import { StubReglamento, StubContrato } from "./ReglamentoContratoStub";
 const MifielWidgetClient = dynamic(() => import("./MifielWidgetClient"), { ssr: false });
 
@@ -42,6 +43,7 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [signatureStatus, setSignatureStatus] = useState(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [freshWidgetId, setFreshWidgetId] = useState("");
@@ -77,25 +79,38 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
     setUploading(true);
     setUploadError("");
     setUploadSuccess("");
+    setUploadProgress(0);
+    const key = steps[currentStep].key;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/documents/${user.id}/${key}/upload`, true);
+    xhr.onload = function () {
+      setUploading(false);
+      setUploadProgress(null);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status !== 200) {
+          setUploadError(data.error || "Error al subir el archivo.");
+        } else {
+          setUploadSuccess("¡Archivo subido! Esperando validación.");
+          setTimeout(() => window.location.reload(), 1000);
+        }
+      } catch {
+        setUploadError("Error al subir.");
+      }
+    };
+    xhr.onerror = function () {
+      setUploading(false);
+      setUploadProgress(null);
+      setUploadError("No se pudo subir.");
+    };
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
     const formData = new FormData();
     formData.append("file", file);
-    try {
-      const key = steps[currentStep].key;
-      const res = await fetch(`/api/documents/${user.id}/${key}/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setUploadError(data.error || "Error al subir el archivo.");
-      } else {
-        setUploadSuccess("¡Archivo subido! Esperando validación.");
-        setTimeout(() => window.location.reload(), 1000);
-      }
-    } catch {
-      setUploadError("Error de red al subir archivo.");
-    }
-    setUploading(false);
+    xhr.send(formData);
   }
 
   async function handleSign() {
@@ -131,7 +146,6 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
     }
   }, [currentStep, steps, stepStatus]);
 
-  // Stepper with fades for cut-off prevention, sticky above 
   const stepper = useMemo(() =>
     <div className="relative w-full max-w-2xl px-2 overflow-visible z-20 pb-1">
       <div className="pointer-events-none absolute left-0 top-0 h-full w-7 z-10" style={{
@@ -234,27 +248,43 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
         <div className="flex-1 w-full px-0 flex flex-col gap-3 items-center mt-1 mb-1">
           {!step.signable ? (
             checklist && checklist.documentId && document ? (
-              <div className="flex flex-col gap-1 items-center">
-                <a href={document.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
-                  <CloudArrowUpIcon className="w-5 h-5" />
-                  Ver archivo subido
-                </a>
-                <div className="text-[11px] text-slate-500">Subido {new Date(document.uploadedAt).toLocaleDateString()}</div>
-                {checklist.status === "rejected" && checklist.rejectionReason && (
-                  <div className="mt-2 px-3 py-1 bg-red-50 text-red-700 rounded text-xs w-full text-left border border-red-200">
-                    Motivo de rechazo: {checklist.rejectionReason}
-                  </div>
-                )}
-                {(checklist.status === "rejected" || !checklist.fulfilled) && (
-                  <div className="w-full mt-3">
-                    <DocumentDropzone
-                      loading={uploading}
-                      error={uploadError}
-                      onFile={handleFileUpload}
-                      accept="application/pdf"
-                    />
-                  </div>
-                )}
+              <div className="flex flex-col gap-2 items-center w-full">
+                <PdfViewer url={document.filePath} height={380} className="mb-2"/>
+                <div className="flex flex-row gap-2 w-full mb-1 items-center justify-center">
+                  <a href={document.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
+                    <CloudArrowUpIcon className="w-5 h-5" />
+                    Descargar PDF
+                  </a>
+                  <span className="text-xs text-slate-400">{document.uploadedAt ? `Subido ${new Date(document.uploadedAt).toLocaleDateString()}` : null}</span>
+                </div>
+                {/* progress, status, and re-upload */}
+                <div className="w-full flex flex-col justify-center items-center">
+                  {checklist.status === "rejected" && checklist.rejectionReason && (
+                    <div className="px-3 py-1 mb-1 bg-red-50 text-red-700 rounded text-xs w-full text-left border border-red-200">
+                      Motivo de rechazo: {checklist.rejectionReason}
+                    </div>
+                  )}
+                  {(checklist.status === "rejected" || !checklist.fulfilled) && (
+                    <div className="w-full">
+                      <DocumentDropzone
+                        loading={uploading}
+                        error={uploadError}
+                        onFile={handleFileUpload}
+                        accept="application/pdf"
+                      />
+                      {uploadProgress !== null &&
+                        <div className="w-full pt-2">
+                          <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
+                            <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                                 style={{width: `${uploadProgress}%`}}></div>
+                          </div>
+                          <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                        </div>
+                      }
+                      {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="w-full mt-3">
@@ -264,6 +294,16 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
                   onFile={handleFileUpload}
                   accept="application/pdf"
                 />
+                {uploadProgress !== null &&
+                  <div className="w-full pt-2">
+                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
+                      <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                           style={{width: `${uploadProgress}%`}}></div>
+                    </div>
+                    <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                  </div>
+                }
+                {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
               </div>
             )
           ) : (
@@ -321,8 +361,8 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
             </div>
           )}
         </div>
-        {/* Nav button bar: always sticky and visible, with enough bottom spacing for floating actions */}
-        <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[64px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
+        {/* Nav bar: always visible, sticky, space for floating support */}
+        <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[68px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
           <button
             className={secondaryButton + " min-w-[120px]"}
             style={{ fontWeight: 900, fontSize: "1.08em" }}
