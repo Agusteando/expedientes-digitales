@@ -4,8 +4,8 @@ import { useRef, useState, useEffect } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 
 /**
- * Carousel stepper with arrows, dots, a11y, and swipe.
- * @param {object[]} steps - Array of { key, label, iconKey }
+ * Carousel stepper with arrows, dots, a11y, and swipe—no redundant step titles/descriptions.
+ * @param {object[]} steps - Array of { key }
  * @param {number} activeStep - current step index
  * @param {function} onStepChange - (idx) => void
  * @param {object} stepStatus - per stepKey: for dot status color
@@ -65,24 +65,6 @@ export default function OnboardingStepper({
     setTouch(null);
   }
 
-  // Allow icons (if provided)
-  const iconMap = {
-    IdentificationIcon:     require("@heroicons/react/24/solid").IdentificationIcon,
-    DocumentTextIcon:       require("@heroicons/react/24/solid").DocumentTextIcon,
-    BriefcaseIcon:          require("@heroicons/react/24/solid").BriefcaseIcon,
-    ShieldCheckIcon:        require("@heroicons/react/24/solid").ShieldCheckIcon,
-    AcademicCapIcon:        require("@heroicons/react/24/solid").AcademicCapIcon,
-    UserCircleIcon:         require("@heroicons/react/24/solid").UserCircleIcon,
-    UserGroupIcon:          require("@heroicons/react/24/solid").UserGroupIcon,
-    ReceiptRefundIcon:      require("@heroicons/react/24/solid").ReceiptRefundIcon,
-    UserPlusIcon:           require("@heroicons/react/24/solid").UserPlusIcon,
-    CheckCircleIcon:        require("@heroicons/react/24/solid").CheckCircleIcon,
-    BookOpenIcon:           require("@heroicons/react/24/solid").BookOpenIcon,
-    PencilSquareIcon:       require("@heroicons/react/24/solid").PencilSquareIcon,
-    DocumentDuplicateIcon:  require("@heroicons/react/24/solid").DocumentDuplicateIcon,
-    ChatBubbleLeftEllipsisIcon: require("@heroicons/react/24/solid").ChatBubbleLeftEllipsisIcon,
-  };
-
   function getColor(key, idx) {
     // stepStatus[key]: {checklist, document, signature}
     // fallback color: gray
@@ -107,7 +89,7 @@ export default function OnboardingStepper({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="w-full flex flex-row items-center justify-center gap-2 xs:gap-6 md:gap-8 relative mt-0 mb-3 z-20">
+      <div className="w-full flex flex-row items-center justify-center gap-2 xs:gap-6 md:gap-8 relative mt-0 mb-2 z-20">
         <button
           type="button"
           aria-label={activeStep === 0 ? "Inicio" : "Paso anterior"}
@@ -119,27 +101,7 @@ export default function OnboardingStepper({
           <ChevronLeftIcon className="w-7 h-7 xs:w-8 xs:h-8 md:w-9 md:h-9 text-cyan-500 " />
         </button>
         <div className="grow w-4 xs:w-5 md:w-7"></div>
-        {/* Step label and icon */}
-        <div className="flex flex-col items-center grow min-w-0 max-w-[86vw] xs:max-w-[370px]">
-          <div className="flex flex-row items-center gap-3 xs:gap-4 py-1 mb-1">
-            {steps[activeStep]?.iconKey && iconMap[steps[activeStep].iconKey]
-             ? (
-              (() => {
-                const Icon = iconMap[steps[activeStep].iconKey];
-                return (
-                  <span className="inline-block">
-                    <Icon className="w-7 h-7 xs:w-9 xs:h-9 md:w-14 md:h-14 text-cyan-700" aria-hidden="true" />
-                  </span>
-                );
-              })()
-            ) : null}
-            <span className="truncate font-bold text-base xs:text-xl md:text-2xl text-cyan-900 dark:text-cyan-100">{steps[activeStep]?.label}</span>
-          </div>
-          <div className="text-xs xs:text-base text-slate-500 px-1 truncate max-w-full text-center">{steps[activeStep]?.description}</div>
-          <div className="mt-2 text-[13px] text-slate-400">
-            Paso <span className="font-bold text-cyan-800">{activeStep+1}</span> de {totalSteps}
-          </div>
-        </div>
+        <div className="grow flex items-center justify-center"></div>
         <div className="grow w-4 xs:w-5 md:w-7"></div>
         <button
           type="button"
@@ -152,7 +114,7 @@ export default function OnboardingStepper({
           <ChevronRightIcon className="w-7 h-7 xs:w-8 xs:h-8 md:w-9 md:h-9 text-cyan-500 " />
         </button>
       </div>
-      <div className="flex flex-row items-center gap-1 xs:gap-2 md:gap-4 mt-0 mb-3 xs:mb-4">
+      <div className="flex flex-row items-center gap-1 xs:gap-2 md:gap-4 mt-0 mb-1 xs:mb-2">
         {steps.map((step, idx) => (
           <button
             key={step.key}
@@ -167,7 +129,7 @@ export default function OnboardingStepper({
               }
             `}
             tabIndex={0}
-            aria-label={`Paso ${idx+1}: ${step.label}`}
+            aria-label={`Paso ${idx+1}`}
             style={{
               boxShadow:
                 idx === activeStep
@@ -190,6 +152,9 @@ export default function OnboardingStepper({
             }}/>
           </button>
         ))}
+      </div>
+      <div className="text-[13px] xs:text-sm text-slate-400 mt-0.5 mb-1 font-semibold">
+        Paso <span className="font-bold text-cyan-800">{activeStep+1}</span> de {totalSteps}
       </div>
     </nav>
   );
