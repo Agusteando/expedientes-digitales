@@ -8,26 +8,12 @@ import fs from "fs/promises";
 import path from "path";
 import { mifielCreateDocument } from "@/lib/mifiel";
 
-/**
- * Robustly debugged: MiFiel sign trigger endpoint.
- * - Logs request headers, cookies, params, and session detail.
- * - Outputs diagnostics on all error paths.
- * - Ensures role and backend userId checks are auditable.
- */
 export async function POST(req, context) {
   const params = await context.params;
   const { userId, type } = params;
-
-  // Convert userId to int for all Prisma usage
   const userIdInt = Number(userId);
+  console.log("[MiFiel/sign] userId:", userId, "type:", type);
 
-  // Debug: Basic incoming info
-  console.log("[MiFiel/sign] Incoming SIGN request for userId:", userId, "type:", type);
-  console.log("[MiFiel/sign] Headers:", JSON.stringify([...req.headers]));
-  const allCookies = req.cookies ? req.cookies.getAll() : (req.headers?.get?.("cookie") ? req.headers.get("cookie") : "NO req.cookies, NO cookie header found");
-  console.log("[MiFiel/sign] Incoming cookies:", allCookies);
-
-  // Try both session mechanisms for debugging
   let session = null, sessionSource = "unknown";
   try {
     session = getSessionFromCookies(req.cookies);
@@ -39,59 +25,88 @@ export async function POST(req, context) {
   } catch (e) {
     console.error("[MiFiel/sign] Session error:", e);
   }
-
-  console.log("[MiFiel/sign] Session (", sessionSource, "):", session);
+  console.log("[MiFiel/sign] Session source:", sessionSource, ", session:", session);
 
   if (!session || !session.user) {
-    console.error("[MiFiel/sign] No authenticated session.");
     return NextResponse.json(
-      { error: "No autenticado.", debug: { session, sessionSource, userId, type, cookies: allCookies } },
+      { error: "No autenticado.", debug: { session, sessionSource } },
       { status: 401 }
     );
   }
 
-  // Defensive: check role and userId
-  const allowedTypes = ["contract", "contrato", "reglamento"];
-  if (!allowedTypes.includes(type)) {
-    console.warn("[MiFiel/sign] Invalid type.", type);
-    return NextResponse.json({ error: "Tipo no firmable.", debug: { type } }, { status: 400 });
-  }
-  // Employees can only sign for themselves (strong type check)
+  const allowedTypes = ["reglamento", "contrato"];
+  const universalDocTypes = ["reglamento", "contrato"];
+  const isUniversal = universalDocTypes.includes(type);
+
   if (session.user.role === "employee" && String(session.user.id) !== String(userIdInt)) {
-    console.warn("[MiFiel/sign] Forbidden: session user mismatch.", { role: session.user.role, sessionId: session.user.id, routeUserId: userId });
-    return NextResponse.json(
-      { error: "Acceso denegado.", debug: { sessionUserId: session.user.id, paramUserId: userId, role: session.user.role } },
-      { status: 403 }
-    );
+    return NextResponse.json({
+      error: "Acceso denegado.",
+      debug: { sessionUserId: session.user.id, paramUserId: userId, role: session.user.role },
+    }, { status: 403 });
   }
 
-  // Log complete session state and parameters for deep debugging
-  console.log("[MiFiel/sign] Proceeding with session.user:", session.user, "params.userId:", userId, "userIdInt:", userIdInt, "type:", type);
-
-  // Find latest pending Document (FIX: use uploadedAt, NOT createdAt)
-  let doc = null;
+  let user = null;
   try {
-    doc = await prisma.document.findFirst({
-      where: { userId: userIdInt, type, status: "pending" },
-      orderBy: { uploadedAt: "desc" }
-    });
+    user = await prisma.user.findUnique({ where: { id: userIdInt } });
   } catch (e) {
-    console.error("[MiFiel/sign] Prisma.document.findFirst error:", e);
-    return NextResponse.json({ error: "DB error. Contacte a soporte.", debug: { e: e.message } }, { status: 500 });
+    console.error("[MiFiel/sign] Prisma.user.findUnique error:", e);
   }
-  if (!doc) {
-    console.warn("[MiFiel/sign] No pending document for this step.", { userId, type });
-    return NextResponse.json(
-      { error: "Documento no subido o ya firmado.", debug: { userId, type } },
-      { status: 404 }
-    );
+  if (!user) {
+    return NextResponse.json({ error: "Usuario no encontrado.", debug: { userId: userIdInt } }, { status: 404 });
   }
 
-  // Check for existing Signature record
+  if (!user.rfc || !/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(user.rfc)) {
+    return NextResponse.json({
+      error: "El usuario no tiene un RFC válido registrado. No es posible firmar este documento. Contacta a Recursos Humanos.",
+      debug: { userId, rfc: user.rfc }
+    }, { status: 400 });
+  }
+  let rfc = user.rfc;
+  console.log("[MiFiel/sign] RFC:", rfc);
+
+  let fileBuff = null, filePath = null, parentDocId = null;
+  if (isUniversal) {
+    filePath = path.join(process.cwd(), "storage", `${type}.pdf`);
+    try {
+      fileBuff = await fs.readFile(filePath);
+    } catch (e) {
+      console.error("[MiFiel/sign] Could not read system PDF:", filePath, e);
+      return NextResponse.json({
+        error: `Archivo PDF universal no encontrado para ${type}.`,
+        debug: { filePath }
+      }, { status: 500 });
+    }
+  } else {
+    let doc = null;
+    try {
+      doc = await prisma.document.findFirst({
+        where: { userId: userIdInt, type, status: "pending" },
+        orderBy: { uploadedAt: "desc" }
+      });
+    } catch (e) {
+      console.error("[MiFiel/sign] Prisma.document.findFirst error:", e);
+      return NextResponse.json({ error: "DB error.", debug: { e: e.message } }, { status: 500 });
+    }
+    if (!doc) {
+      return NextResponse.json({ error: "Documento no subido o ya firmado.", debug: { userId, type } }, { status: 404 });
+    }
+    parentDocId = doc.id;
+    filePath = path.join(process.cwd(), doc.filePath);
+    try {
+      fileBuff = await fs.readFile(filePath);
+    } catch (e) {
+      return NextResponse.json({ error: "Archivo PDF del usuario no encontrado.", debug: { filePath } }, { status: 500 });
+    }
+  }
+
+  let signatureWhere = isUniversal
+    ? { userId: userIdInt, type }
+    : { userId: userIdInt, type, documentId: parentDocId };
+
   let existingSig = null;
   try {
     existingSig = await prisma.signature.findFirst({
-      where: { userId: userIdInt, type, documentId: doc.id }
+      where: signatureWhere
     });
   } catch (e) {
     console.error("[MiFiel/sign] Prisma.signature.findFirst error:", e);
@@ -101,72 +116,52 @@ export async function POST(req, context) {
   if (existingSig && existingSig.status === "pending")
     return NextResponse.json({ error: "Firma en curso.", signature: existingSig, debug: { existingSig } }, { status: 409 });
 
-  // Read user info (name/email)
-  let user = null;
-  try {
-    user = await prisma.user.findUnique({ where: { id: userIdInt } });
-  } catch (e) {
-    console.error("[MiFiel/sign] Prisma.user.findUnique error:", e);
-  }
-  if (!user) {
-    console.warn("[MiFiel/sign] Usuario no encontrado.", userIdInt);
-    return NextResponse.json({ error: "Usuario no encontrado.", debug: { userId: userIdInt } }, { status: 404 });
-  }
-
-  // Lookup RFC, for MiFiel signer; assume user.profile.rfc or fallback
-  let rfc = "XAXX010101000";
-  if (user.profile && user.profile.rfc) rfc = user.profile.rfc;
-  console.log("[MiFiel/sign] RFC for signer:", rfc);
-
-  // Read PDF file
-  const filePath = path.join(process.cwd(), doc.filePath);
-  let fileBuff = null;
-  try {
-    fileBuff = await fs.readFile(filePath);
-  } catch (e) {
-    console.error("[MiFiel/sign] File read failed:", filePath, e);
-    return NextResponse.json({ error: "Archivo no encontrado, contacte a soporte.", debug: { filePath } }, { status: 500 });
-  }
-
-  // Compose signatories
-  const signatories = [{
+  // Send all required fields per doc!
+  const external_id = `expdig_${type}_${userIdInt}_${Date.now()}`;
+  const signersArr = [{
     name: user.name,
     email: user.email,
     tax_id: rfc,
   }];
+  const viewersArr = session.user && session.user.email ? [{ email: session.user.email }] : [];
 
-  // Compose external_id (unique/idempotent per doc ID)
-  const external_id = `expdig_${type}_${userIdInt}_${doc.id}`;
-
-  // Call MiFiel API
   let result = null;
   try {
     result = await mifielCreateDocument({
       file: fileBuff,
-      signers: signatories,
+      signatories: signersArr,
       name: `${type}.pdf`,
-      external_id,
       days_to_expire: 7,
-      message_for_signers: "Por favor firme este documento oficial de IECS-IEDIS.",
+      external_id,
+      message_for_signers: `Por favor firma el documento oficial (${type}) de IECS-IEDIS.`,
       payer: user.email,
       remind_every: 2,
       send_invites: true,
+      massive: false,
       transfer_operation_document_id: 0,
-      viewers: [{ email: session.user.email }],
+      viewers: viewersArr
     });
-    console.log("[MiFiel/sign] MiFiel API createDocument SUCCESS: ", result);
+    console.log("[MiFiel/sign] MiFiel API createDocument SUCCESS: ", result.id);
   } catch (e) {
-    console.error("[MiFiel/sign] CreateDocument API error:", e);
-    return NextResponse.json({ error: "No se pudo generar el flujo de firma.", debug: { e: e.message, stack: e.stack } }, { status: 500 });
+    // FULLY LOG and return Mifiel errors!
+    const mifielStatus = e?.response?.status;
+    const mifielData = e?.response?.data;
+    console.error("[MiFiel/sign] CreateDocument API error status:", mifielStatus);
+    console.error("[MiFiel/sign] CreateDocument API error body:", mifielData);
+    return NextResponse.json({
+      error: "No se pudo generar el flujo de firma.",
+      mifielStatus,
+      mifielData,
+      debug: { userId, type, filePath }
+    }, { status: 500 });
   }
 
-  // Save to Signature table
   let sig = null;
   try {
     sig = await prisma.signature.create({
       data: {
         userId: userIdInt,
-        documentId: doc.id,
+        documentId: parentDocId,
         type,
         status: result.state,
         mifielMetadata: result,
@@ -179,14 +174,6 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "No se pudo guardar la firma.", debug: { e: e.message } }, { status: 500 });
   }
 
-  // Update doc.status to "signing"
-  try {
-    await prisma.document.update({ where: { id: doc.id }, data: { status: "signing" } });
-  } catch (e) {
-    console.error("[MiFiel/sign] Could not update document status:", e);
-    // Not a fatal error, continue
-  }
-
   return NextResponse.json({
     ok: true,
     signatureId: sig.id,
@@ -195,11 +182,10 @@ export async function POST(req, context) {
     widgetSigners: result.signers,
     mifielDocument: result,
     debug: {
-      calledBy: { userId: userIdInt, type, sessionUser: session.user, sessionSource },
-      doc,
+      userId: userIdInt,
+      type,
       filePath,
       user,
-      rfc,
     }
   });
 }

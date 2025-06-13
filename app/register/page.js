@@ -11,7 +11,9 @@ export default function Register() {
     name: "",
     email: "",
     password: "",
-    password2: ""
+    password2: "",
+    curp: "",
+    rfc: ""
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -26,8 +28,8 @@ export default function Register() {
     e.preventDefault();
     setError("");
     setSuccess("");
-    if (!form.name || !form.email || !form.password || !form.password2) {
-      setError("Por favor llena todos los campos.");
+    if (!form.name || !form.email || !form.password || !form.password2 || !form.curp || !form.rfc) {
+      setError("Por favor llena todos los campos requeridos.");
       return;
     }
     if (form.password !== form.password2) {
@@ -42,7 +44,9 @@ export default function Register() {
         body: JSON.stringify({
           name: form.name,
           email: form.email,
-          password: form.password
+          password: form.password,
+          curp: form.curp,
+          rfc: form.rfc,
         })
       });
       const data = await res.json();
@@ -84,6 +88,16 @@ export default function Register() {
           <label className="font-semibold text-xs text-teal-800 dark:text-teal-200">Correo electrónico</label>
           <input className="rounded-md px-3 py-2 border border-gray-200 bg-white focus:ring-2 focus:ring-teal-300 transition text-base"
                  name="email" autoComplete="email" type="email" required value={form.email} onChange={formChange} />
+          <label className="font-semibold text-xs text-teal-800 dark:text-teal-200">CURP</label>
+          <input className="rounded-md px-3 py-2 border border-gray-200 bg-white focus:ring-2 focus:ring-cyan-300 transition text-base uppercase tracking-wider"
+                 name="curp" autoComplete="off" required minLength={18} maxLength={18} value={form.curp} onChange={formChange}
+                 placeholder="Por ejemplo: GOMC960912HDFRRL04"
+          />
+          <label className="font-semibold text-xs text-teal-800 dark:text-teal-200">RFC</label>
+          <input className="rounded-md px-3 py-2 border border-gray-200 bg-white focus:ring-2 focus:ring-cyan-300 transition text-base uppercase tracking-wider"
+                 name="rfc" autoComplete="off" required minLength={12} maxLength={13} value={form.rfc} onChange={formChange}
+                 placeholder="Por ejemplo: GOMC960912QX2"
+          />
           <label className="font-semibold text-xs text-teal-800 dark:text-teal-200">Contraseña</label>
           <input className="rounded-md px-3 py-2 border border-gray-200 bg-white focus:ring-2 focus:ring-teal-300 transition text-base"
                  name="password" autoComplete="new-password" type="password" required value={form.password} onChange={formChange} />
