@@ -5,8 +5,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import {
   ArrowLeftCircleIcon, ArrowRightCircleIcon,
-  ArrowPathIcon, CheckCircleIcon, XCircleIcon, CloudArrowUpIcon, InformationCircleIcon,
-  IdentificationIcon, DocumentTextIcon, BriefcaseIcon, ShieldCheckIcon, AcademicCapIcon, UserCircleIcon, UserGroupIcon, ReceiptRefundIcon, UserPlusIcon, CheckCircleIcon as CheckCircleIconOutline, BookOpenIcon, PencilSquareIcon,
+  ChevronLeftIcon, ChevronRightIcon,
+  CloudArrowUpIcon,
   DocumentDuplicateIcon,
   ChatBubbleLeftEllipsisIcon
 } from "@heroicons/react/24/solid";
@@ -16,23 +16,24 @@ import dynamic from "next/dynamic";
 import DocumentDropzone from "./DocumentDropzone";
 import PdfViewer from "./PdfViewer";
 import { StubReglamento, StubContrato } from "./ReglamentoContratoStub";
+import { getStatusMeta } from "@/lib/expedienteStatus";
 const MifielWidgetClient = dynamic(() => import("./MifielWidgetClient"), { ssr: false });
 
 const iconMap = {
-  IdentificationIcon,
-  DocumentTextIcon,
-  BriefcaseIcon,
-  ShieldCheckIcon,
-  AcademicCapIcon,
-  UserCircleIcon,
-  UserGroupIcon,
-  ReceiptRefundIcon,
-  UserPlusIcon,
-  CheckCircleIcon: CheckCircleIconOutline,
-  BookOpenIcon,
-  PencilSquareIcon,
-  DocumentDuplicateIcon,
-  ChatBubbleLeftEllipsisIcon
+  IdentificationIcon:     require("@heroicons/react/24/solid").IdentificationIcon,
+  DocumentTextIcon:       require("@heroicons/react/24/solid").DocumentTextIcon,
+  BriefcaseIcon:          require("@heroicons/react/24/solid").BriefcaseIcon,
+  ShieldCheckIcon:        require("@heroicons/react/24/solid").ShieldCheckIcon,
+  AcademicCapIcon:        require("@heroicons/react/24/solid").AcademicCapIcon,
+  UserCircleIcon:         require("@heroicons/react/24/solid").UserCircleIcon,
+  UserGroupIcon:          require("@heroicons/react/24/solid").UserGroupIcon,
+  ReceiptRefundIcon:      require("@heroicons/react/24/solid").ReceiptRefundIcon,
+  UserPlusIcon:           require("@heroicons/react/24/solid").UserPlusIcon,
+  CheckCircleIcon:        require("@heroicons/react/24/solid").CheckCircleIcon,
+  BookOpenIcon:           require("@heroicons/react/24/solid").BookOpenIcon,
+  PencilSquareIcon:       require("@heroicons/react/24/solid").PencilSquareIcon,
+  DocumentDuplicateIcon:  require("@heroicons/react/24/solid").DocumentDuplicateIcon,
+  ChatBubbleLeftEllipsisIcon: require("@heroicons/react/24/solid").ChatBubbleLeftEllipsisIcon,
 };
 
 function formatDateDisplay(date) {
@@ -42,16 +43,6 @@ function formatDateDisplay(date) {
   } catch {
     return String(date);
   }
-}
-
-function formatStatusIcon(status) {
-  if (status === "fulfilled" || status === "accepted" || status === "signed" || status === "completed")
-    return <CheckCircleIcon className="text-emerald-500 w-5 h-5 inline align-middle" />;
-  if (status === "pending" || status === "signing")
-    return <ArrowPathIcon className="text-yellow-500 w-5 h-5 inline align-middle animate-spin-slow" />;
-  if (status === "rejected")
-    return <XCircleIcon className="text-red-500 w-5 h-5 inline align-middle" />;
-  return <InformationCircleIcon className="text-gray-300 w-5 h-5 inline align-middle" />;
 }
 
 export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) {
@@ -64,6 +55,11 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [freshWidgetId, setFreshWidgetId] = useState("");
   const scrollerRef = useRef(null);
+  const successTimeout = useRef();
+
+  // For stepper chevrons
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   // Live wizard state
   const [stepStatus, setStepStatus] = useState({});
@@ -71,7 +67,36 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const [fetchError, setFetchError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
 
-  // Always refetch data on mount or after upload
+  // Track if we should run animation on "Siguiente" enable
+  const [animateNext, setAnimateNext] = useState(false);
+
+  // Helper text visibility/hints for novice users
+  const [showHelperToast, setShowHelperToast] = useState(true);
+
+  // Stepper chevron: update scroll state on scroll/resize
+  useEffect(() => {
+    function updateScrollers() {
+      if (!scrollerRef.current) {
+        setCanScrollLeft(false);
+        setCanScrollRight(false);
+        return;
+      }
+      const el = scrollerRef.current;
+      setCanScrollLeft(el.scrollLeft > 5);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 5);
+    }
+    if (!scrollerRef.current) return;
+    updateScrollers();
+    const el = scrollerRef.current;
+    el.addEventListener("scroll", updateScrollers, { passive: true });
+    window.addEventListener("resize", updateScrollers);
+    return () => {
+      el.removeEventListener("scroll", updateScrollers);
+      window.removeEventListener("resize", updateScrollers);
+    };
+  }, []);
+
+  // Fetch steps and status from backend
   async function fetchExpedienteSteps() {
     setLoadingData(true);
     setFetchError("");
@@ -88,7 +113,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     }
   }
 
-  // Fetch on mount
   useEffect(() => {
     fetchExpedienteSteps();
     // eslint-disable-next-line
@@ -115,10 +139,23 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     // eslint-disable-next-line
   }, [uploadsComplete, currentStep, stepStatus]);
 
+  // Center active step in stepper horizontal scroll
   useEffect(() => {
-    if (scrollerRef.current) {
-      const btn = scrollerRef.current.querySelector(".stepper-btn-active");
-      if (btn) btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (!scrollerRef.current) return;
+    const btn = scrollerRef.current.querySelector(".stepper-btn-active");
+    if (btn) {
+      // Center it nicely, with "peek"
+      const scrollerBox = scrollerRef.current;
+      const btnBox = btn.getBoundingClientRect();
+      const parentBox = scrollerBox.getBoundingClientRect();
+      // Scroll so btn is centered (or as close as possible)
+      const btnCenter = btnBox.left + btnBox.width / 2;
+      const parentCenter = parentBox.left + parentBox.width / 2;
+      const scrollOffset = btnCenter - parentCenter;
+      scrollerBox.scrollBy({
+        left: scrollOffset,
+        behavior: "smooth",
+      });
     }
   }, [currentStep]);
 
@@ -138,8 +175,10 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
         if (xhr.status !== 200) {
           setUploadError(data.error || "Error al subir el archivo.");
         } else {
-          setUploadSuccess("¡Archivo subido! Esperando validación.");
-          // Optimistically re-fetch the latest file list/histories
+          setUploadSuccess("¡Archivo subido! Puedes avanzar al siguiente paso.");
+          setAnimateNext(true);
+          clearTimeout(successTimeout.current);
+          successTimeout.current = setTimeout(() => setUploadSuccess(""), 4000);
           fetchExpedienteSteps();
         }
       } catch {
@@ -176,7 +215,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
           setFreshWidgetId(data.widgetSigners[0].widget_id);
         }
         setSignatureStatus("Abre el widget y firma tu documento digital.");
-        // After sign init, refetch to get latest signature object/status
         fetchExpedienteSteps();
       }
     } catch {
@@ -197,32 +235,75 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     // eslint-disable-next-line
   }, [currentStep, steps, stepStatus]);
 
-  // Rerender after download/signature event (calls to MiFiel, etc.)
   function handleWidgetSuccess() {
     fetchExpedienteSteps();
     setSignatureStatus("¡Documento firmado!");
   }
 
-  const stepper = useMemo(() =>
+  // Show helper toast for onboarding
+  useEffect(() => {
+    setShowHelperToast(true);
+    const timeout = setTimeout(() => setShowHelperToast(false), 10000);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  function getDisplayStatus(item, isSignable) {
+    if (!item) return getStatusMeta("pending");
+    if (isSignable) return getStatusMeta(item.status);
+    // Checklist
+    if (item.fulfilled) return getStatusMeta("fulfilled");
+    return getStatusMeta(item.status || (item.fulfilled ? "fulfilled" : "pending"));
+  }
+
+  useEffect(() => {
+    if (!animateNext) return;
+    const timeout = setTimeout(() => setAnimateNext(false), 800);
+    return () => clearTimeout(timeout);
+  }, [animateNext]);
+
+  // STEP 1: Mobile stepper with chevron overlay and scroll logic
+  const mobileStepper = useMemo(() =>
     <div className="relative w-full max-w-2xl px-2 overflow-visible z-20 pb-1">
-      <div className="pointer-events-none absolute left-0 top-0 h-full w-7 z-10" style={{
-        background: "linear-gradient(to right,rgba(255,255,255,0.95) 75%,transparent 100%)"
-      }} />
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-7 z-10" style={{
-        background: "linear-gradient(to left,rgba(255,255,255,0.95) 75%,transparent 100%)"
-      }} />
+      {/* Chevrons (XS, SM): show only if needed */}
+      <button
+        className={`absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-white/80 rounded-full p-[3px] shadow border border-slate-200 xs:hidden transition duration-150 ${canScrollLeft ? "opacity-95" : "opacity-0 pointer-events-none"}`}
+        style={{display: canScrollLeft ? "block" : "none"}}
+        onClick={() => {
+          if (!scrollerRef.current) return;
+          scrollerRef.current.scrollBy({ left: -scrollerRef.current.clientWidth * 0.8, behavior: "smooth" });
+        }}
+        aria-label="Ver pasos anteriores"
+        tabIndex={canScrollLeft ? 0 : -1}
+        type="button"
+      >
+        <ChevronLeftIcon className="w-7 h-7 text-cyan-500" />
+      </button>
+      <button
+        className={`absolute right-0 top-1/2 -translate-y-1/2 z-30 bg-white/80 rounded-full p-[3px] shadow border border-slate-200 xs:hidden transition duration-150 ${canScrollRight ? "opacity-95" : "opacity-0 pointer-events-none"}`}
+        style={{display: canScrollRight ? "block" : "none"}}
+        onClick={() => {
+          if (!scrollerRef.current) return;
+          scrollerRef.current.scrollBy({ left: scrollerRef.current.clientWidth * 0.8, behavior: "smooth" });
+        }}
+        aria-label="Ver pasos siguientes"
+        tabIndex={canScrollRight ? 0 : -1}
+        type="button"
+      >
+        <ChevronRightIcon className="w-7 h-7 text-cyan-500" />
+      </button>
       <ol
         ref={scrollerRef}
-        className="flex w-full justify-center items-center gap-3 sm:gap-4 overflow-x-auto py-3 px-3 sm:px-7 scroll-smooth no-scrollbar relative z-20"
+        className="flex w-full justify-center items-center gap-3 sm:gap-4 overflow-x-auto py-3 px-5 sm:px-7 scroll-smooth no-scrollbar relative z-20"
         style={{ WebkitOverflowScrolling: "touch" }}>
         {steps.map((s, idx) => {
           const Icon = iconMap[s.iconKey];
           const isActive = idx === currentStep;
           const isDone = !s.signable
             ? stepStatus[s.key]?.checklist?.fulfilled
-            : stepStatus[s.key]?.signature?.status === "signed" || stepStatus[s.key]?.signature?.status === "completed";
+            : getDisplayStatus(stepStatus[s.key]?.signature, true).color === "emerald";
+          // Use peeking: give min-w and margin to show prev/next peeks
           return (
-            <li key={s.key} className="flex flex-col items-center">
+            <li key={s.key} className="flex flex-col items-center select-none min-w-[52px] xs:min-w-[56px]">
               <button
                 className={`${stepperButton} 
                   ${isActive
@@ -245,7 +326,8 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
         })}
       </ol>
     </div>
-  , [steps, currentStep, stepStatus, uploadsComplete, uploading]);
+  // Hide chevrons above xs/sm, stepper remains flex/grid responsive
+  , [steps, currentStep, stepStatus, uploadsComplete, uploading, canScrollLeft, canScrollRight]);
 
   if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
   if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
@@ -254,28 +336,26 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const status = stepStatus[step.key] || {};
   const { checklist, document, signature } = status;
 
-  // Historical versions from up-to-date fetch, newest first
   const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs[0] || null;
 
-  function formatStatus(item, isSignable) {
-    if (isSignable) {
-      if (!item) return { color: "gray", text: "Pendiente" };
-      if (item.status === "completed" || item.status === "signed") return { color: "emerald", text: "Firmado" };
-      if (item.status === "pending" || item.status === "signing") return { color: "yellow", text: "Firma en proceso" };
-      return { color: "gray", text: "Pendiente" };
-    } else {
-      if (!item) return { color: "gray", text: "Pendiente" };
-      if (item.fulfilled) return { color: "emerald", text: "Entregado" };
-      if (item.status === "rejected") return { color: "red", text: "Rechazado" };
-      return { color: "gray", text: "Pendiente" };
-    }
-  }
+  const isCurrentStepFulfilled = step.signable
+    ? getDisplayStatus(signature, true).color === "emerald"
+    : checklist && checklist.fulfilled;
+
+  const canGoNext = currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading;
+  const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
+  const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
-      <div className="w-full flex flex-col items-center sticky top-[56px] md:top-[60px] bg-transparent z-30">{stepper}</div>
+      <div className="w-full flex flex-col items-center sticky top-[56px] md:top-[60px] bg-transparent z-30">{mobileStepper}</div>
       <section className={wizardCard + " relative"}>
+        {showHelperToast && (
+          <div className="w-full bg-cyan-100/60 dark:bg-cyan-900/70 flex flex-row items-center justify-center rounded-xl py-3 px-4 shadow text-cyan-900 dark:text-cyan-100 font-semibold text-sm xs:text-base mb-1 text-center select-none animate-fade-in">
+            <span className="inline">Para avanzar a cada paso, sube el archivo solicitado y espera la validación. Verás un mensaje de éxito cuando tu archivo haya sido recibido. Puedes navegar libremente en los pasos arriba si deseas consultar o regresar.</span>
+          </div>
+        )}
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
           <div className="w-14 h-14 relative mb-2">
             <Image src="/IMAGOTIPO-IECS-IEDIS.png" alt="IECS-IEDIS" fill className="object-contain rounded-xl bg-white/70" />
@@ -293,18 +373,27 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
             </div>
           </div>
         </div>
-        <div className="w-full flex justify-center py-1">
-          <span className={`font-bold text-xs md:text-sm px-3 py-1 rounded-full
-            ${formatStatus(step.signable ? signature : checklist, step.signable).color === "emerald"
-                ? "bg-emerald-50 text-emerald-700"
-                : formatStatus(step.signable ? signature : checklist, step.signable).color === "red"
-                    ? "bg-red-50 text-red-600"
-                    : formatStatus(step.signable ? signature : checklist, step.signable).color === "yellow"
-                        ? "bg-yellow-50 text-yellow-800"
-                        : "bg-slate-100 text-slate-500"}
-            `}>
-            {formatStatus(step.signable ? signature : checklist, step.signable).text}
-          </span>
+        {/* Status Badge and upload result display (persistent, always visible) */}
+        <div className="w-full flex flex-row items-center justify-center py-1">
+          {(() => {
+            const stat = step.signable ? getDisplayStatus(signature, true) : getDisplayStatus(checklist, false);
+            const Icon = stat.icon;
+            return (
+              <span className={`inline-flex items-center gap-2 font-bold text-xs md:text-sm px-3 py-1 rounded-full
+                ${stat.color === "emerald"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : stat.color === "red"
+                    ? "bg-red-50 text-red-600 border border-red-200"
+                    : stat.color === "yellow"
+                      ? "bg-yellow-50 text-yellow-800 border border-yellow-100"
+                      : "bg-slate-100 text-slate-500 border border-slate-100"
+                } `
+              }>
+                {Icon && <Icon className="w-5 h-5 mr-0.5" />}
+                {stat.display}
+              </span>
+            );
+          })()}
         </div>
         <div className="flex-1 w-full px-0 flex flex-col gap-3 items-center mt-1 mb-1">
           {!step.signable ? (
@@ -320,11 +409,16 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
                     {latestDoc.uploadedAt ? `Subido ${formatDateDisplay(latestDoc.uploadedAt)}` : null}
                     {latestDoc.version ? <> &nbsp;| v{latestDoc.version}</> : null}
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold">
-                    {formatStatusIcon(latestDoc.status)}
-                    {latestDoc.status}
-                  </span>
                 </div>
+                {uploadSuccess && (
+                  <div className="flex items-center justify-center gap-2 px-5 py-2 mt-1 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
+                    <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
+                      <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
+                    </svg>
+                    <span>{uploadSuccess}</span>
+                  </div>
+                )}
                 {latestDoc.reviewComment && (
                   <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-xs text-fuchsia-900 mt-1 mb-1 shadow-sm max-w-xl w-full">
                     <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
@@ -338,24 +432,28 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
                       Versiones anteriores
                     </div>
                     <div className="flex flex-col gap-1 max-h-40 overflow-auto">
-                      {historyDocs.slice(1).map((doc, idx) => (
-                        <div key={doc.id} className="flex flex-col gap-0.5 border border-cyan-50 dark:border-slate-800 py-1 px-2 rounded bg-cyan-50/50 dark:bg-slate-800/30 text-[12px]">
-                          <div className="flex flex-row gap-2 items-center">
-                            <a href={doc.filePath} target="_blank" className="underline text-cyan-800 dark:text-cyan-200 font-bold break-all">{`Versión v${doc.version}`}</a>
-                            <span className="ml-2 text-slate-500">{formatDateDisplay(doc.uploadedAt)}</span>
-                            <span className="inline-flex items-center gap-1 ml-2">
-                              {formatStatusIcon(doc.status)}
-                              {doc.status}
-                            </span>
-                          </div>
-                          {doc.reviewComment && (
-                            <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
-                              <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
-                              <span className="break-words">{doc.reviewComment}</span>
+                      {historyDocs.slice(1).map((doc, idx) => {
+                        const stat = getStatusMeta(doc.status);
+                        const Icon = stat.icon;
+                        return (
+                          <div key={doc.id} className="flex flex-col gap-0.5 border border-cyan-50 dark:border-slate-800 py-1 px-2 rounded bg-cyan-50/50 dark:bg-slate-800/30 text-[12px]">
+                            <div className="flex flex-row gap-2 items-center">
+                              <a href={doc.filePath} target="_blank" className="underline text-cyan-800 dark:text-cyan-200 font-bold break-all">{`Versión v${doc.version}`}</a>
+                              <span className="ml-2 text-slate-500">{formatDateDisplay(doc.uploadedAt)}</span>
+                              <span className={`inline-flex items-center gap-1 ml-2 font-bold text-xs ${stat.color === "emerald" ? "text-emerald-700" : stat.color === "red" ? "text-red-700" : "text-slate-400"}`}>
+                                {Icon && <Icon className="w-4 h-4" />}
+                                {stat.display}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            {doc.reviewComment && (
+                              <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
+                                <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
+                                <span className="break-words">{doc.reviewComment}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -375,7 +473,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
                       <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
                     </div>
                   }
-                  {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
                 </div>
               </div>
             ) : (
@@ -395,7 +492,15 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
                     <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
                   </div>
                 }
-                {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
+                {uploadSuccess && (
+                  <div className="flex items-center justify-center gap-2 px-5 py-2 mt-2 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
+                    <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
+                      <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
+                    </svg>
+                    <span>{uploadSuccess}</span>
+                  </div>
+                )}
               </div>
             )
           ) : (
@@ -465,14 +570,41 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
             Atrás
           </button>
           <button
-            className={navigationButton + " min-w-[128px]"}
-            style={{ fontWeight: 900, fontSize: "1.11em" }}
-            onClick={() => setCurrentStep(currentStep + 1)}
-            disabled={currentStep === totalSteps - 1 || (steps[currentStep + 1]?.signable && !uploadsComplete)}
+            className={
+              nextButtonBase +
+              (!canGoNext ? " " + nextButtonDisabled : "") +
+              (animateNext ? " animate-pop" : "")
+            }
+            style={{
+              fontWeight: 900,
+              fontSize: "1.11em",
+              filter: animateNext ? "drop-shadow(0 6px 16px #a7f3d0)" : undefined
+            }}
+            disabled={!canGoNext}
+            onClick={() => {
+              if (canGoNext) setCurrentStep(currentStep + 1);
+            }}
             tabIndex={0}
-            aria-disabled={currentStep === totalSteps - 1 || (steps[currentStep + 1]?.signable && !uploadsComplete)}
+            aria-disabled={!canGoNext}
           >
-            Siguiente
+            <span>Siguiente</span>
+            {animateNext &&
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <svg className="w-14 h-14 animate-sparkle" viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="24" r="15" fill="#A7F3D0" fillOpacity=".16"/>
+                  <circle cx="24" cy="24" r="8" fill="#34D399" fillOpacity=".33"/>
+                  <circle cx="24" cy="24" r="4" fill="#059669" fillOpacity=".44"/>
+                  <g>
+                    {[...Array(7)].map((_, i) => {
+                      const angle = i * (360/7);
+                      const x = 24 + Math.cos(angle * Math.PI/180) * 14;
+                      const y = 24 + Math.sin(angle * Math.PI/180) * 14;
+                      return <circle key={i} cx={x} cy={y} r={2+i%2} fill="#34D399" opacity="0.8"/>;
+                    })}
+                  </g>
+                </svg>
+              </span>
+            }
             <ArrowRightCircleIcon className="w-6 h-6" />
           </button>
         </div>
@@ -484,6 +616,30 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
           ¡Has completado tu expediente! Muchas gracias y bienvenido(a) a IECS-IEDIS.
         </div>
       )}
+      <style jsx global>{`
+        @keyframes pop {
+          0% { transform: scale(1);}
+          20% { transform: scale(1.10);}
+          40% { transform: scale(0.96);}
+          60% { transform: scale(1.04);}
+          80% { transform: scale(0.98);}
+          100% { transform: scale(1);}
+        }
+        .animate-pop { animation: pop 0.8s cubic-bezier(.18,1.3,.99,1) both; }
+        @keyframes sparkle {
+          0% { opacity: 0; transform: scale(0.6);}
+          20% { opacity: 1; transform: scale(1.08);}
+          50% { opacity: 1; transform: scale(0.94);}
+          75% { opacity: 1; transform: scale(1.03);}
+          100% { opacity: 0; transform: scale(1.16);}
+        }
+        .animate-sparkle { animation: sparkle 0.9s cubic-bezier(.14,1.3,.45,1.02) both; }
+        .animate-fade-in { animation: fadein 0.888s both; }
+        @keyframes fadein {
+          0% { opacity: 0; transform: translateY(-10px);}
+          100% { opacity: 1; transform: translateY(0);}
+        }
+      `}</style>
     </div>
   );
 }
