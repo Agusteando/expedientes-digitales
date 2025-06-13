@@ -1,15 +1,11 @@
 
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, DocumentIcon } from "@heroicons/react/24/outline";
-import * as pdfjsLib from "pdfjs-dist/build/pdf";
-import "pdfjs-dist/web/pdf_viewer.css";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function PdfViewer({ url, height = 380, className = "" }) {
   const canvasRef = useRef(null);
+  const [pdfjs, setPdfjs] = useState(null); // Dynamically imported pdfjs
   const [instance, setInstance] = useState(null);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
@@ -17,16 +13,27 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
   const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState("");
 
-  // Load PDF doc
+  // Dynamically import pdfjs only on client
   useEffect(() => {
-    if (!url) return;
+    let cancelled = false;
+    import("pdfjs-dist/build/pdf").then(pdfjsLib => {
+      // Set workerSrc to our local file
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+      if (!cancelled) setPdfjs(pdfjsLib);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load document after pdfjs loaded
+  useEffect(() => {
+    if (!url || !pdfjs) return;
     setError("");
     setInstance(null);
     setNumPages(0);
     setPage(1);
     setRendering(true);
 
-    pdfjsLib.getDocument(url).promise
+    pdfjs.getDocument(url).promise
       .then(pdfDoc => {
         setInstance(pdfDoc);
         setNumPages(pdfDoc.numPages);
@@ -37,16 +44,16 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
         setError("No se pudo cargar el PDF.");
         setRendering(false);
       });
-  }, [url]);
+  }, [url, pdfjs]);
 
-  // Render current page to canvas
+  // Render current page
   useEffect(() => {
     if (!instance || !canvasRef.current || collapsed) return;
     setRendering(true);
     instance.getPage(page).then(pdfPage => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
-      const viewport = pdfPage.getViewport({ scale: 1.35 }); // Quality/resolution, adjust as needed
+      const viewport = pdfPage.getViewport({ scale: 1.35 });
       canvas.height = viewport.height;
       canvas.width = viewport.width;
       pdfPage.render({ canvasContext: ctx, viewport }).promise.then(() => {
@@ -78,7 +85,6 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? "Mostrar PDF" : "Ocultar PDF"}
           className="hover:bg-slate-100 text-cyan-500 rounded px-1 py-1 transition"
-          tabIndex={0}
           type="button"
         >
           {collapsed
@@ -101,7 +107,7 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
               </div>
             )}
           </div>
-          {/* Controls */}
+          {/* Controls: pagination */}
           <div className="w-full flex flex-row items-center justify-center gap-3 pb-2">
             <button
               disabled={page === 1 || rendering}
@@ -114,12 +120,10 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
               <ChevronLeftIcon className="w-6 h-6" />
             </button>
             <div className="flex flex-row items-baseline gap-1 text-xs md:text-sm">
-              <label className="sr-only" htmlFor="pdfviewer-page-navigate">Página</label>
               <input
                 type="number"
                 value={page}
                 min={1} max={numPages}
-                id="pdfviewer-page-navigate"
                 onChange={e => {
                   let val = parseInt(e.target.value || "1", 10);
                   val = Math.max(1, Math.min(val, numPages));
@@ -128,6 +132,7 @@ export default function PdfViewer({ url, height = 380, className = "" }) {
                 className="w-10 px-1 rounded border border-cyan-200 text-center bg-white focus:outline-none focus:ring-2 ring-cyan-300 font-bold text-slate-700"
                 style={{ fontSize: "1em" }}
                 disabled={rendering}
+                aria-label="Ir a la página"
               />&nbsp;
               <span className="text-slate-500 font-semibold">/ {numPages || 1}</span>
             </div>
