@@ -1,41 +1,28 @@
-
 "use client";
-import { useEffect, useState } from "react";
+
+import Link from "next/link";
 
 export default function FloatingWhatsappButton() {
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    function handleResize() {
-      setIsDesktop(window.innerWidth >= 768);
-    }
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   return (
-    <a
-      href="https://wa.me/5217291065569?text=Hola%20tengo%20una%20duda%20sobre%20mi%20expediente"
-      className={`fixed z-50 group transition-all
-        ${isDesktop ? "right-14 bottom-10" : "right-4 bottom-4"}
-      `}
+    <Link
+      href="https://wa.me/5210000000000"
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="¿Tienes dudas? Escríbenos por WhatsApp"
-      style={{
-        boxShadow: "0 2px 16px 0 rgba(37,211,102,0.13)",
-      }}
+      className="fixed bottom-8 right-8 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-[#25D366] hover:brightness-110
+                 shadow-lg text-white font-semibold text-sm transition"
     >
-      <span className="sr-only">Contáctanos por WhatsApp</span>
-      <span className="flex items-center gap-2 bg-green-500 hover:bg-green-600 transition rounded-full shadow-lg px-5 py-3 
-        text-white text-base font-bold drop-shadow-lg border-2 border-white/60 dark:border-slate-900/30">
-        <svg height="29" width="29" viewBox="0 0 32 32" className="mr-1 shrink-0" aria-hidden>
-          <circle cx="16" cy="16" r="16" fill="white"/>
-          <path fill="#25D366" d="M16 6.4c5.28 0 9.6 4.07 9.6 9.1 0 1.83-.6 3.54-1.66 4.91l1.08 4.02-4.13-1.07A9.12 9.12 0 0116 25.6c-5.28 0-9.6-4.07-9.6-9.1s4.32-9.1 9.6-9.1zm-.05 2.2a7.02 7.02 0 00-7 7.23c.02 1.55.42 2.97 1.14 4.16l-1.17 4.41 4.54-1.14a7 7 0 008.49-.9 7.03 7.03 0 001.91-4.73 7.02 7.02 0 00-7.08-7.03zm.19 2.42c.23 0 .45.04.6.23l1.34 1.61c.18.21.2.5.04.71l-.34.5c-.07.1-.07.24 0 .34.54.93 1.37 1.77 2.33 2.33.09.06.23.06.34 0l.5-.34a.53.53 0 01.7.04l1.61 1.34c.19.16.23.45.1.66-.9 1.5-1.97 1.93-3.5 1.93-2.16 0-3.92-1.75-3.92-3.92 0-1.33.61-2.34 1.94-3.34.09-.07.17-.09.26-.09z"/>
-        </svg>
-        <span className="font-semibold hidden sm:inline">¿Dudas? WhatsApp</span>
-      </span>
-    </a>
+      {/* WhatsApp icon */}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden
+      >
+        <path d="M20.52 3.48A11.9 11.9 0 0012.05 0C5.4 0 .05 5.36.05 11.99a11.9 11.9 0 001.6 6L0 24l6.25-1.64a11.9 11.9 0 005.8 1.46h.01c6.65 0 12.05-5.36 12.05-11.99a11.86 11.86 0 00-3.64-8.35zm-8.47 18.6c-1.98 0-3.9-.52-5.58-1.51l-.4-.23-3.72.98.99-3.63-.26-.39A9.44 9.44 0 012.6 12c0-5.18 4.26-9.4 9.49-9.4 2.54 0 4.93.99 6.73 2.8a9.31 9.31 0 012.79 6.6c.01 5.18-4.26 9.4-9.46 9.4zm5.2-7.04c-.29-.14-1.72-.85-1.99-.95-.27-.1-.46-.14-.65.14-.19.28-.75.95-.93 1.15-.17.19-.34.21-.63.07-.29-.14-1.22-.45-2.32-1.44-.86-.77-1.43-1.71-1.6-2-.17-.29-.02-.44.13-.58.14-.14.29-.34.44-.51.15-.17.2-.29.3-.49.1-.2.05-.37-.02-.51-.07-.14-.65-1.6-.89-2.2-.23-.55-.47-.48-.65-.49l-.55-.01c-.2 0-.51.07-.78.37-.27.29-1.03 1.01-1.03 2.47 0 1.46 1.05 2.89 1.19 3.09.14.19 2.05 3.12 4.97 4.37.7.3 1.25.48 1.68.61.7.22 1.33.19 1.83.12.56-.08 1.72-.7 1.97-1.38.24-.69.24-1.28.17-1.38-.07-.1-.26-.17-.55-.31z" />
+      </svg>
+      ¿Dudas? WhatsApp
+    </Link>
   );
 }
