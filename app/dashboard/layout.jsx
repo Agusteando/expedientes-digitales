@@ -1,51 +1,39 @@
 
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/nextauth-options";
-import Image from "next/image";
+import Providers from "@/components/Providers";
+
+// your other imports...
 import LogoutButton from "@/components/LogoutButton";
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import Image from "next/image";
 
-export default async function DashboardLayout({ children }) {
-  const session = await getServerSession(authOptions);
-
-  if (
-    !session ||
-    !session.user ||
-    !["employee", "candidate"].includes(session.user.role)
-  ) {
-    redirect("/login");
-  }
-
-  const { user } = session;
-
+/**
+ * Dashboard layout: wraps children in NextAuth SessionProvider for logout and session hooks.
+ * Assumes user is passed via props or uses useSession if required.
+ */
+export default function DashboardLayout({ children }) {
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-[#f6eafe] via-[#e4f7fb] to-[#eafff7] dark:from-[#181e2a] dark:via-[#192736] dark:to-[#225245] flex flex-col">
-      <nav className="w-full bg-white/90 dark:bg-slate-900/90 border-b border-slate-100 dark:border-slate-800 py-2 px-2 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="font-bold text-lg text-cyan-700 dark:text-cyan-200 hover:underline" style={{ fontFamily: "var(--font-fredoka), var(--font-montserrat)" }}>
-            Expedientes Digitales
-          </Link>
-        </div>
-        <div className="flex items-center gap-3 min-w-0 max-w-xs sm:max-w-full">
-          <Image
-            src={user.picture || "/IMAGOTIPO-IECS-IEDIS.png"}
-            alt={user.name || "Perfil"}
-            width={32}
-            height={32}
-            className="rounded-full bg-white border border-cyan-300 object-cover"
-            style={{ minWidth: 32, minHeight: 32, maxWidth: 32, maxHeight: 32 }}
-            priority
-          />
-          <span className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px] sm:max-w-[220px] text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-semibold" title={user.name}>
-            {user.name}
-          </span>
-          <LogoutButton className="ml-2" />
-        </div>
-      </nav>
-      <main className="flex-1 w-full flex flex-col items-center">
-        {children}
-      </main>
-    </div>
+    <Providers>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+        <nav className="w-full bg-white/90 dark:bg-slate-900/80 shadow flex items-center justify-between px-4 py-2 fixed z-40">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/signia.png"
+              alt="Signia"
+              width={48}
+              height={48}
+              priority
+              className="rounded"
+            />
+            <span className="ml-2 font-bold text-lg tracking-tight text-slate-900 dark:text-white">Dashboard</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-slate-700 dark:text-slate-200">Bienvenido</span>
+            <LogoutButton className="ml-2" />
+          </div>
+        </nav>
+        <main className="flex-1 w-full flex flex-col items-center justify-center pt-20">
+          {children}
+        </main>
+      </div>
+    </Providers>
   );
 }

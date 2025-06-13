@@ -1,11 +1,6 @@
 
 "use client";
 
-/**
- * Refined NextAuth login for IECS-IEDIS employees/candidates.
- * Styled to match brand & expediente wizard: glassy card, better spacing, logo header.
- * Uses signIn("credentials") from next-auth/react for proper cookie/session.
- */
 import { useState } from "react";
 import Image from "next/image";
 import { ArrowRightEndOnRectangleIcon, CheckCircleIcon, KeyIcon } from "@heroicons/react/24/solid";

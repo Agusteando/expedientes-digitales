@@ -1,7 +1,11 @@
+
 import "./globals.css";
 import { Montserrat, Fredoka } from "next/font/google";
 import Image from "next/image";
 import FloatingWhatsappButton from "@/components/FloatingWhatsappButton";
+import SessionHeader from "@/components/SessionHeader";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/nextauth-options";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -21,33 +25,19 @@ export const metadata = {
   description: "Plataforma para administrar expedientes y firmas digitales.",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="es" className="min-h-full scroll-smooth">
       <body
         className={`${montserrat.variable} ${fredoka.variable} antialiased min-h-screen flex flex-col`}
         style={{ fontFamily: "var(--font-montserrat), system-ui, sans-serif" }}
       >
-        {/* HEADER: Signia at 120×120 to really pop */}
-        <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
-          <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-2.5">
-            <Image
-              src="/signia.png"
-              alt="Signia"
-              width={140}
-              height={140}
-              priority
-            />
-            <span className="hidden sm:block text-xs font-medium text-slate-500 tracking-wider">
-              Plataforma Laboral IECS-IEDIS
-            </span>
-          </div>
-        </header>
-
+        <SessionHeader session={session} />
         <main className="flex-1 flex flex-col items-center justify-center">
           {children}
         </main>
-
         <div className="pointer-events-none fixed bottom-0 left-0 w-full flex items-end justify-center select-none">
           <Image
             src="/IMAGOTIPO-IECS-IEDIS.png"
@@ -60,7 +50,6 @@ export default function RootLayout({ children }) {
             priority
           />
         </div>
-
         <FloatingWhatsappButton />
       </body>
     </html>
