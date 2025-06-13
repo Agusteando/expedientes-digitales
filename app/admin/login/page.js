@@ -1,15 +1,16 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
-import { ShieldCheckIcon } from "@heroicons/react/24/solid";
+import { ShieldCheckIcon, ArrowRightEndOnRectangleIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
 
 const GSI_CLIENT_ID = process.env.NEXT_PUBLIC_GSI_CLIENT_ID;
 
 export default function AdminLogin() {
   const router = useRouter();
+  const gsiInitialized = useRef(false);
 
   useEffect(() => {
     function handleCredentialResponse(response) {
@@ -28,7 +29,6 @@ export default function AdminLogin() {
             alert(data.error || "Acceso denegado");
             return;
           }
-          // REDIRIGE SOLO A ADMIN INICIO!
           router.replace("/admin/inicio");
         })
         .catch(() => {
@@ -48,7 +48,7 @@ export default function AdminLogin() {
     }
 
     function initializeGIS() {
-      if (!window.google?.accounts?.id || document.getElementById("g_id_signin_initialized")) return;
+      if (!window.google?.accounts?.id || gsiInitialized.current) return;
       window.google.accounts.id.initialize({
         client_id: GSI_CLIENT_ID,
         callback: handleCredentialResponse,
@@ -68,42 +68,47 @@ export default function AdminLogin() {
           locale: "es",
         }
       );
-      // Mark as initialized to avoid double-init
-      const flag = document.createElement("div");
-      flag.id = "g_id_signin_initialized";
-      flag.style.display = "none";
-      document.body.appendChild(flag);
+      gsiInitialized.current = true;
     }
 
     return () => {
-      const flag = document.getElementById("g_id_signin_initialized");
-      if (flag) flag.remove();
+      gsiInitialized.current = false;
     };
   }, [router]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-[#e6e9fe] via-[#faf6fa] to-[#def1e4] dark:from-[#1a1e2e] dark:via-[#22253b] dark:to-[#25404d] gap-6 p-4">
-      <div className="w-full max-w-lg mx-auto bg-white/75 dark:bg-slate-800/90 rounded-3xl p-7 shadow-lg backdrop-blur-md border border-purple-100 dark:border-purple-800 flex flex-col items-center">
-        <Image
-          src="/IMAGOTIPO-IECS-IEDIS.png"
-          alt="IECS-IEDIS"
-          width={82}
-          height={82}
-          className="mb-3 rounded-xl bg-white object-contain shadow"
-          priority
-        />
-        <ShieldCheckIcon className="h-10 w-10 text-purple-700 dark:text-fuchsia-200 mb-4" />
-        <h1
-          className="font-bold text-xl xs:text-2xl mb-2 text-center text-slate-800 dark:text-white"
-          style={{ fontFamily: "var(--font-fredoka), sans-serif" }}
-        >
-          Ingreso administrativo IECS-IEDIS
-        </h1>
-        <p className="mb-4 text-slate-600 dark:text-slate-300 font-bold text-center">
-          Solo personal autorizado <br />
-          Ingresa con Google usando tu <b>correo institucional</b>
-        </p>
-        <div id="g_id_signin" className="mb-3" style={{ width: 260 }} />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 via-fuchsia-50 to-cyan-50 dark:from-[#181e2a] dark:via-[#22183b] dark:to-[#307da7] p-4">
+      <div className="w-full max-w-md xs:max-w-xl mx-auto relative bg-white/90 dark:bg-slate-900/90 shadow-2xl rounded-3xl px-5 xs:px-10 py-8 sm:py-11 border border-purple-100 dark:border-purple-900 flex flex-col items-center backdrop-blur-2xl">
+        {/* Brand */}
+        <div className="flex flex-col items-center gap-1 mb-6 select-none">
+          <div className="mb-2 relative w-14 h-14 xs:w-16 xs:h-16">
+            <Image
+              src="/IMAGOTIPO-IECS-IEDIS.png"
+              alt="IECS-IEDIS"
+              fill
+              className="object-contain bg-white rounded-xl shadow-sm"
+              priority
+            />
+          </div>
+          <span className="font-fredoka font-bold text-lg text-purple-900 dark:text-fuchsia-200 tracking-tight">IECS-IEDIS</span>
+        </div>
+        <span className="mx-auto mb-1 text-center inline-flex items-center gap-2 font-bold text-base xs:text-xl text-purple-900 dark:text-fuchsia-100 tracking-tight select-none">
+          <ShieldCheckIcon className="w-7 h-7 text-fuchsia-700 dark:text-fuchsia-300" />
+          Ingreso de Administradores
+        </span>
+        <div className="text-slate-600 dark:text-slate-200 text-xs xs:text-sm font-semibold text-center mb-7">
+          <span className="text-purple-700 dark:text-fuchsia-200">Panel administrativo<br />Plataforma IECS-IEDIS</span>
+        </div>
+        <div className="w-full flex flex-col items-center gap-2">
+          <div id="g_id_signin" className="mb-2 w-full flex flex-col items-center"></div>
+        </div>
+        <div className="w-full text-center text-xs mt-5 text-slate-500 dark:text-slate-300">
+          <ArrowRightEndOnRectangleIcon className="w-4 h-4 inline mr-1 mb-0.5 text-fuchsia-600 dark:text-fuchsia-300" />
+          Solo personal autorizado con correo <span className="font-bold text-purple-900 dark:text-fuchsia-100">@casitaiedis.edu.mx</span>
+        </div>
+        <div className="w-full text-center pt-2 text-xs text-slate-400">
+          ¿Eres empleado? <a href="/login" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-fuchsia-700 transition">Acceso de empleado</a>
+        </div>
       </div>
     </div>
   );
