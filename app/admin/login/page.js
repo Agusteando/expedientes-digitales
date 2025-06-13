@@ -104,7 +104,7 @@ export default function AdminLogin() {
         </div>
         <div className="w-full text-center text-xs mt-5 text-slate-500 dark:text-slate-300">
           <ArrowRightEndOnRectangleIcon className="w-4 h-4 inline mr-1 mb-0.5 text-fuchsia-600 dark:text-fuchsia-300" />
-          Solo personal autorizado con correo <span className="font-bold text-purple-900 dark:text-fuchsia-100">@casitaiedis.edu.mx</span>
+          Solo personal autorizado con correo <span className="font-bold text-purple-900 dark:text-fuchsia-100">institucional</span>
         </div>
         <div className="w-full text-center pt-2 text-xs text-slate-400">
           ¿Eres empleado? <a href="/login" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-fuchsia-700 transition">Acceso de empleado</a>
