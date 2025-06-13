@@ -5,18 +5,18 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import {
   ArrowLeftCircleIcon, ArrowRightCircleIcon,
-  ChevronLeftIcon, ChevronRightIcon,
   CloudArrowUpIcon,
   DocumentDuplicateIcon,
   ChatBubbleLeftEllipsisIcon
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "./stepMetaExpediente";
-import { wizardCard, stepperButton, navigationButton, secondaryButton, mainButton } from "../lib/ui-classes";
+import { wizardCard, navigationButton, secondaryButton, mainButton } from "../lib/ui-classes";
 import dynamic from "next/dynamic";
 import DocumentDropzone from "./DocumentDropzone";
 import PdfViewer from "./PdfViewer";
 import { StubReglamento, StubContrato } from "./ReglamentoContratoStub";
 import { getStatusMeta } from "@/lib/expedienteStatus";
+import OnboardingStepper from "./OnboardingStepper";
 const MifielWidgetClient = dynamic(() => import("./MifielWidgetClient"), { ssr: false });
 
 const iconMap = {
@@ -54,12 +54,7 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const [signatureStatus, setSignatureStatus] = useState(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [freshWidgetId, setFreshWidgetId] = useState("");
-  const scrollerRef = useRef(null);
   const successTimeout = useRef();
-
-  // For stepper chevrons
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
 
   // Live wizard state
   const [stepStatus, setStepStatus] = useState({});
@@ -72,29 +67,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
 
   // Helper text visibility/hints for novice users
   const [showHelperToast, setShowHelperToast] = useState(true);
-
-  // Stepper chevron: update scroll state on scroll/resize
-  useEffect(() => {
-    function updateScrollers() {
-      if (!scrollerRef.current) {
-        setCanScrollLeft(false);
-        setCanScrollRight(false);
-        return;
-      }
-      const el = scrollerRef.current;
-      setCanScrollLeft(el.scrollLeft > 5);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 5);
-    }
-    if (!scrollerRef.current) return;
-    updateScrollers();
-    const el = scrollerRef.current;
-    el.addEventListener("scroll", updateScrollers, { passive: true });
-    window.addEventListener("resize", updateScrollers);
-    return () => {
-      el.removeEventListener("scroll", updateScrollers);
-      window.removeEventListener("resize", updateScrollers);
-    };
-  }, []);
 
   // Fetch steps and status from backend
   async function fetchExpedienteSteps() {
@@ -138,26 +110,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     }
     // eslint-disable-next-line
   }, [uploadsComplete, currentStep, stepStatus]);
-
-  // Center active step in stepper horizontal scroll
-  useEffect(() => {
-    if (!scrollerRef.current) return;
-    const btn = scrollerRef.current.querySelector(".stepper-btn-active");
-    if (btn) {
-      // Center it nicely, with "peek"
-      const scrollerBox = scrollerRef.current;
-      const btnBox = btn.getBoundingClientRect();
-      const parentBox = scrollerBox.getBoundingClientRect();
-      // Scroll so btn is centered (or as close as possible)
-      const btnCenter = btnBox.left + btnBox.width / 2;
-      const parentCenter = parentBox.left + parentBox.width / 2;
-      const scrollOffset = btnCenter - parentCenter;
-      scrollerBox.scrollBy({
-        left: scrollOffset,
-        behavior: "smooth",
-      });
-    }
-  }, [currentStep]);
 
   async function handleFileUpload(file) {
     setUploading(true);
@@ -261,74 +213,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     return () => clearTimeout(timeout);
   }, [animateNext]);
 
-  // STEP 1: Mobile stepper with chevron overlay and scroll logic
-  const mobileStepper = useMemo(() =>
-    <div className="relative w-full max-w-2xl px-2 overflow-visible z-20 pb-1">
-      {/* Chevrons (XS, SM): show only if needed */}
-      <button
-        className={`absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-white/80 rounded-full p-[3px] shadow border border-slate-200 xs:hidden transition duration-150 ${canScrollLeft ? "opacity-95" : "opacity-0 pointer-events-none"}`}
-        style={{display: canScrollLeft ? "block" : "none"}}
-        onClick={() => {
-          if (!scrollerRef.current) return;
-          scrollerRef.current.scrollBy({ left: -scrollerRef.current.clientWidth * 0.8, behavior: "smooth" });
-        }}
-        aria-label="Ver pasos anteriores"
-        tabIndex={canScrollLeft ? 0 : -1}
-        type="button"
-      >
-        <ChevronLeftIcon className="w-7 h-7 text-cyan-500" />
-      </button>
-      <button
-        className={`absolute right-0 top-1/2 -translate-y-1/2 z-30 bg-white/80 rounded-full p-[3px] shadow border border-slate-200 xs:hidden transition duration-150 ${canScrollRight ? "opacity-95" : "opacity-0 pointer-events-none"}`}
-        style={{display: canScrollRight ? "block" : "none"}}
-        onClick={() => {
-          if (!scrollerRef.current) return;
-          scrollerRef.current.scrollBy({ left: scrollerRef.current.clientWidth * 0.8, behavior: "smooth" });
-        }}
-        aria-label="Ver pasos siguientes"
-        tabIndex={canScrollRight ? 0 : -1}
-        type="button"
-      >
-        <ChevronRightIcon className="w-7 h-7 text-cyan-500" />
-      </button>
-      <ol
-        ref={scrollerRef}
-        className="flex w-full justify-center items-center gap-3 sm:gap-4 overflow-x-auto py-3 px-5 sm:px-7 scroll-smooth no-scrollbar relative z-20"
-        style={{ WebkitOverflowScrolling: "touch" }}>
-        {steps.map((s, idx) => {
-          const Icon = iconMap[s.iconKey];
-          const isActive = idx === currentStep;
-          const isDone = !s.signable
-            ? stepStatus[s.key]?.checklist?.fulfilled
-            : getDisplayStatus(stepStatus[s.key]?.signature, true).color === "emerald";
-          // Use peeking: give min-w and margin to show prev/next peeks
-          return (
-            <li key={s.key} className="flex flex-col items-center select-none min-w-[52px] xs:min-w-[56px]">
-              <button
-                className={`${stepperButton} 
-                  ${isActive
-                    ? "border-fuchsia-600 bg-fuchsia-100 text-fuchsia-800 ring-2 ring-fuchsia-500/40 stepper-btn-active"
-                    : isDone
-                      ? "border-emerald-400 bg-emerald-100 text-emerald-700"
-                      : "border-slate-200 bg-white dark:bg-slate-800 text-slate-300 dark:text-slate-500"
-                  }`}
-                aria-current={isActive ? "step" : undefined}
-                style={{ minWidth: "48px", minHeight: "48px" }}
-                disabled={(!uploadsComplete && s.signable) || uploading}
-                onClick={() => setCurrentStep(idx)}
-                aria-label={`Paso: ${s.label}`}
-                type="button"
-              >
-                {Icon && <Icon className="h-8 w-8 sm:h-9 sm:w-9 align-middle" aria-hidden="true" />}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  // Hide chevrons above xs/sm, stepper remains flex/grid responsive
-  , [steps, currentStep, stepStatus, uploadsComplete, uploading, canScrollLeft, canScrollRight]);
-
   if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
   if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
 
@@ -344,18 +228,28 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     : checklist && checklist.fulfilled;
 
   const canGoNext = currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading;
+  const canGoPrev = currentStep > 0 && !uploading && !signatureLoading;
   const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
   const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
+  const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
-      <div className="w-full flex flex-col items-center sticky top-[56px] md:top-[60px] bg-transparent z-30">{mobileStepper}</div>
+      <OnboardingStepper
+        steps={steps}
+        activeStep={currentStep}
+        onStepChange={(idx) => setCurrentStep(idx)}
+        stepStatus={stepStatus}
+        allowFreeJump={true}
+        className="mb-3 px-0 xs:px-1 sm:px-0" 
+      />
       <section className={wizardCard + " relative"}>
         {showHelperToast && (
           <div className="w-full bg-cyan-100/60 dark:bg-cyan-900/70 flex flex-row items-center justify-center rounded-xl py-3 px-4 shadow text-cyan-900 dark:text-cyan-100 font-semibold text-sm xs:text-base mb-1 text-center select-none animate-fade-in">
             <span className="inline">Para avanzar a cada paso, sube el archivo solicitado y espera la validación. Verás un mensaje de éxito cuando tu archivo haya sido recibido. Puedes navegar libremente en los pasos arriba si deseas consultar o regresar.</span>
           </div>
         )}
+        {/* Card header: logo & title */}
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
           <div className="w-14 h-14 relative mb-2">
             <Image src="/IMAGOTIPO-IECS-IEDIS.png" alt="IECS-IEDIS" fill className="object-contain rounded-xl bg-white/70" />
@@ -373,7 +267,7 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
             </div>
           </div>
         </div>
-        {/* Status Badge and upload result display (persistent, always visible) */}
+        {/* Status Badge and upload result display */}
         <div className="w-full flex flex-row items-center justify-center py-1">
           {(() => {
             const stat = step.signable ? getDisplayStatus(signature, true) : getDisplayStatus(checklist, false);
@@ -560,10 +454,10 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
         </div>
         <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[68px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
           <button
-            className={secondaryButton + " min-w-[120px]"}
+            className={secondaryButton + " min-w-[120px]" + (!canGoPrev ? " " + prevButtonDisabled : "")}
             style={{ fontWeight: 900, fontSize: "1.08em" }}
             onClick={() => setCurrentStep(currentStep - 1)}
-            disabled={currentStep === 0}
+            disabled={!canGoPrev}
             tabIndex={0}
           >
             <ArrowLeftCircleIcon className="w-6 h-6" />
