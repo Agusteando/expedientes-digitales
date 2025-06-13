@@ -10,7 +10,7 @@ import {
   ChatBubbleLeftEllipsisIcon
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "./stepMetaExpediente";
-import { wizardCard, navigationButton, secondaryButton, mainButton } from "../lib/ui-classes";
+import { wizardCard, secondaryButton, mainButton } from "../lib/ui-classes";
 import dynamic from "next/dynamic";
 import DocumentDropzone from "./DocumentDropzone";
 import PdfViewer from "./PdfViewer";
@@ -233,17 +233,30 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
 
+  // Adjust this value to match your sticky app nav/header height (56px=top-14, 64px=top-16, adjust if needed)
+  const stickyTop = "top-16";
+
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
-      <OnboardingStepper
-        steps={steps}
-        activeStep={currentStep}
-        onStepChange={(idx) => setCurrentStep(idx)}
-        stepStatus={stepStatus}
-        allowFreeJump={true}
-        className="mb-3 px-0 xs:px-1 sm:px-0" 
-      />
-      <section className={wizardCard + " relative"}>
+      {/* Sticky stepper: visible above the card, sticky in the viewport below any main sticky app header/nav */}
+      <div
+        className={`w-full z-30 sticky ${stickyTop} px-0 xs:px-1 sm:px-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100/70 dark:border-slate-900/70`}
+        style={{
+          // Backup for Safari that ignores sticky on non-block/relative z
+          left: 0, right: 0,
+        }}
+      >
+        <OnboardingStepper
+          steps={steps}
+          activeStep={currentStep}
+          onStepChange={(idx) => setCurrentStep(idx)}
+          stepStatus={stepStatus}
+          allowFreeJump={true}
+          className="py-1"
+        />
+      </div>
+      {/* Wizard card, scrolls under sticky stepper */}
+      <section className={wizardCard + " relative mt-0"}>
         {showHelperToast && (
           <div className="w-full bg-cyan-100/60 dark:bg-cyan-900/70 flex flex-row items-center justify-center rounded-xl py-3 px-4 shadow text-cyan-900 dark:text-cyan-100 font-semibold text-sm xs:text-base mb-1 text-center select-none animate-fade-in">
             <span className="inline">Para avanzar a cada paso, sube el archivo solicitado y espera la validación. Verás un mensaje de éxito cuando tu archivo haya sido recibido. Puedes navegar libremente en los pasos arriba si deseas consultar o regresar.</span>
