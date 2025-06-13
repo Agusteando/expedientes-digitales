@@ -18,6 +18,9 @@ export async function POST(req, context) {
   const params = await context.params;
   const { userId, type } = params;
 
+  // Convert userId to int for all Prisma usage
+  const userIdInt = Number(userId);
+
   // Debug: Basic incoming info
   console.log("[MiFiel/sign] Incoming SIGN request for userId:", userId, "type:", type);
   console.log("[MiFiel/sign] Headers:", JSON.stringify([...req.headers]));
@@ -54,7 +57,7 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Tipo no firmable.", debug: { type } }, { status: 400 });
   }
   // Employees can only sign for themselves (strong type check)
-  if (session.user.role === "employee" && String(session.user.id) !== String(userId)) {
+  if (session.user.role === "employee" && String(session.user.id) !== String(userIdInt)) {
     console.warn("[MiFiel/sign] Forbidden: session user mismatch.", { role: session.user.role, sessionId: session.user.id, routeUserId: userId });
     return NextResponse.json(
       { error: "Acceso denegado.", debug: { sessionUserId: session.user.id, paramUserId: userId, role: session.user.role } },
@@ -63,14 +66,14 @@ export async function POST(req, context) {
   }
 
   // Log complete session state and parameters for deep debugging
-  console.log("[MiFiel/sign] Proceeding with session.user:", session.user, "params.userId:", userId, "type:", type);
+  console.log("[MiFiel/sign] Proceeding with session.user:", session.user, "params.userId:", userId, "userIdInt:", userIdInt, "type:", type);
 
-  // Find latest pending Document
+  // Find latest pending Document (FIX: use uploadedAt, NOT createdAt)
   let doc = null;
   try {
     doc = await prisma.document.findFirst({
-      where: { userId, type, status: "pending" },
-      orderBy: { createdAt: "desc" }
+      where: { userId: userIdInt, type, status: "pending" },
+      orderBy: { uploadedAt: "desc" }
     });
   } catch (e) {
     console.error("[MiFiel/sign] Prisma.document.findFirst error:", e);
@@ -88,7 +91,7 @@ export async function POST(req, context) {
   let existingSig = null;
   try {
     existingSig = await prisma.signature.findFirst({
-      where: { userId, type, documentId: doc.id }
+      where: { userId: userIdInt, type, documentId: doc.id }
     });
   } catch (e) {
     console.error("[MiFiel/sign] Prisma.signature.findFirst error:", e);
@@ -101,13 +104,13 @@ export async function POST(req, context) {
   // Read user info (name/email)
   let user = null;
   try {
-    user = await prisma.user.findUnique({ where: { id: userId } });
+    user = await prisma.user.findUnique({ where: { id: userIdInt } });
   } catch (e) {
     console.error("[MiFiel/sign] Prisma.user.findUnique error:", e);
   }
   if (!user) {
-    console.warn("[MiFiel/sign] Usuario no encontrado.", userId);
-    return NextResponse.json({ error: "Usuario no encontrado.", debug: { userId } }, { status: 404 });
+    console.warn("[MiFiel/sign] Usuario no encontrado.", userIdInt);
+    return NextResponse.json({ error: "Usuario no encontrado.", debug: { userId: userIdInt } }, { status: 404 });
   }
 
   // Lookup RFC, for MiFiel signer; assume user.profile.rfc or fallback
@@ -133,7 +136,7 @@ export async function POST(req, context) {
   }];
 
   // Compose external_id (unique/idempotent per doc ID)
-  const external_id = `expdig_${type}_${userId}_${doc.id}`;
+  const external_id = `expdig_${type}_${userIdInt}_${doc.id}`;
 
   // Call MiFiel API
   let result = null;
@@ -162,7 +165,7 @@ export async function POST(req, context) {
   try {
     sig = await prisma.signature.create({
       data: {
-        userId,
+        userId: userIdInt,
         documentId: doc.id,
         type,
         status: result.state,
@@ -192,7 +195,7 @@ export async function POST(req, context) {
     widgetSigners: result.signers,
     mifielDocument: result,
     debug: {
-      calledBy: { userId, type, sessionUser: session.user, sessionSource },
+      calledBy: { userId: userIdInt, type, sessionUser: session.user, sessionSource },
       doc,
       filePath,
       user,
