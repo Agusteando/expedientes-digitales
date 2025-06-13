@@ -9,8 +9,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextauth-options";
 
 /**
- * Handles expediente document upload, now ensures only 1 active Document and 1 ChecklistItem per type/user,
- * and instantly sets Document as "accepted" and ChecklistItem as fulfilled. Also clears any duplicates.
+ * Handles expediente document upload, versioned, never deletes old versions, supports auto-accept/fulfilled.
+ * DEFENSIVE: Always converts IDs to int for DB; uses string for session match.
  */
 export async function POST(req, context) {
   const params = await context.params;
@@ -30,6 +30,8 @@ export async function POST(req, context) {
   if (!session || !session.user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
+
+  // Use String comparison for session vs route param match, but ONLY use int for DB
   if (
     (session.user.role === "employee" || session.user.role === "candidate") &&
     String(session.user.id) !== String(userIdInt)
@@ -37,6 +39,18 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Acceso denegado." }, { status: 403 });
   }
 
+  // Defensive runtime log for debugging
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[UPLOAD] Route userId (String):", userId, "| Session user.id:", session.user.id, typeof session.user.id, "| Used as Int:", userIdInt, typeof userIdInt);
+  }
+
+  // Always look up user using INT
+  const user = await prisma.user.findUnique({ where: { id: userIdInt } });
+  if (!user) {
+    return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
+  }
+
+  // Handle file
   const formData = await req.formData();
   const file = formData.get("file");
   if (!file) return NextResponse.json({ error: "Falta archivo." }, { status: 400 });
@@ -55,43 +69,32 @@ export async function POST(req, context) {
 
   await fs.writeFile(dest, fileBuff);
 
-  // Ensure user exists
-  const user = await prisma.user.findUnique({ where: { id: userIdInt } });
-  if (!user) {
-    await fs.unlink(dest);
-    return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
-  }
-
-  // Remove ALL previous Document + ChecklistItem of this user/type (eliminate all possible duplicates)
-  const oldDocs = await prisma.document.findMany({
-    where: { userId: userIdInt, type }
+  // Get new version number for user/type
+  const latest = await prisma.document.findFirst({
+    where: { userId: userIdInt, type },
+    orderBy: { version: "desc" },
+    select: { version: true }
   });
-  for (const oldDoc of oldDocs) {
-    try { await fs.unlink(path.join(folder, path.basename(oldDoc.filePath))); } catch {}
-    await prisma.checklistItem.deleteMany({ where: { userId: userIdInt, type, documentId: oldDoc.id } });
-    await prisma.document.delete({ where: { id: oldDoc.id } });
-  }
+  const nextVersion = latest ? latest.version + 1 : 1;
 
-  // Re-check no duplicate ChecklistItem exists (for extreme edge cases)
-  await prisma.checklistItem.deleteMany({ where: { userId: userIdInt, type } });
-
-  // Create Document as instantly "accepted"
+  // Create Document (never delete any!)
   const doc = await prisma.document.create({
     data: {
       userId: userIdInt,
       type,
       filePath: `/storage/documents/${userIdInt}/${fname}`,
-      status: "accepted"
+      status: "accepted", // Or "pending" if you want admin review
+      version: nextVersion
     }
   });
 
-  // ChecklistItem linkage, instantly fulfilled
+  // ChecklistItem linkage (fulfilled immediately for UX, or false if you want admin review)
   const item = await prisma.checklistItem.create({
     data: {
       userId: userIdInt,
       type,
       required: true,
-      fulfilled: true,
+      fulfilled: true, // set to false if you want admin review before showing as completed
       documentId: doc.id
     }
   });
