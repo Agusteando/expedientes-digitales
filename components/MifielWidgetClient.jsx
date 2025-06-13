@@ -1,56 +1,67 @@
 
 "use client";
 import { useEffect, useRef } from "react";
+import { MifielWidget, defineCustomElements } from "@mifiel/widget-react";
 
 /**
- * Renders MiFiel Widget in a client-only boundary.
- * @param {string} widgetId - The unique ID for the signatory (from the signature.mifielMetadata.signers[0].widget_id).
- * @param {function} onSuccess - Callback for successful signing.
- * @param {function} onError - Callback for error.
- * @param {string} env - "production" or "sandbox"
+ * Renders the MiFiel Widget for digital signature.
+ * - Supports both ESM, React props, and fallback listeners.
+ * - Emits clear logs for widget loading/troubleshooting.
  */
-export default function MifielWidgetClient({ widgetId, onSuccess, onError, env = "production" }) {
-  const loaded = useRef(false);
+export default function MifielWidgetClient({
+  widgetId,
+  onSuccess,
+  onError,
+  env = "production",
+  successBtnText = "¡Documento firmado!"
+}) {
+  const widgetContainerRef = useRef();
+
   useEffect(() => {
-    if (!window || loaded.current) return;
-    // Load Mifiel Widget CDN JS if not loaded
-    if (!window.customElements?.get("mifiel-widget")) {
-      const script = document.createElement("script");
-      script.src = "https://app.mifiel.com/widget-component/index.js";
-      script.async = true;
-      script.onload = () => (loaded.current = true);
-      document.body.appendChild(script);
-    } else {
-      loaded.current = true;
-    }
+    defineCustomElements(window);
   }, []);
 
-  // Attach success/error event handlers on client
+  // Fallback listeners for event capture/debugging
   useEffect(() => {
-    if (!widgetId) return;
-    const interval = setInterval(() => {
-      const widget = document.getElementById(`mifiel-widget-${widgetId}`);
-      if (widget) {
-        widget.addEventListener("signSuccess", onSuccess || (() => {}));
-        widget.addEventListener("signError", onError || (() => {}));
-        clearInterval(interval);
-      }
-    }, 400);
-    return () => clearInterval(interval);
+    const widget = widgetContainerRef.current?.querySelector("mifiel-widget");
+    if (!widget) return;
+    function handleSuccess(e) {
+      console.log("[MiFiel Widget] signSuccess event", e);
+      if (onSuccess) onSuccess(e);
+    }
+    function handleError(e) {
+      console.log("[MiFiel Widget] signError event", e);
+      if (onError) onError(e);
+    }
+    widget.addEventListener("signSuccess", handleSuccess);
+    widget.addEventListener("signError", handleError);
+    return () => {
+      widget.removeEventListener("signSuccess", handleSuccess);
+      widget.removeEventListener("signError", handleError);
+    };
     // eslint-disable-next-line
-  }, [widgetId]);
+  }, [widgetId, widgetContainerRef.current, onSuccess, onError]);
 
-  if (!widgetId) return null;
+  if (!widgetId) {
+    console.warn("[MiFiel Widget] widgetId missing, widget will not render.");
+    return null;
+  }
 
   return (
-    <div className="w-full rounded-lg border border-cyan-100 bg-white px-0 py-0 overflow-hidden shadow-sm">
-      <mifiel-widget
-        id={`mifiel-widget-${widgetId}`}
+    <div
+      ref={widgetContainerRef}
+      className="w-full rounded-lg border border-cyan-100 bg-white px-0 py-0 overflow-hidden shadow-sm"
+    >
+      <MifielWidget
+        id={widgetId}
         environment={env}
-        success-btn-text="¡Documento firmado!"
-        container-class="w-full"
+        successBtnText={successBtnText}
+        /* ESM event props, most React setups (after next-transpile-modules) */
+        onSignSuccess={onSuccess}
+        onSignError={onError}
+        containerClass="w-full"
         style={{ display: "block", width: "100%", minHeight: 420 }}
-      ></mifiel-widget>
+      />
     </div>
   );
 }
