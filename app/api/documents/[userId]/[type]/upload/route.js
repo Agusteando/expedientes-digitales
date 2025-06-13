@@ -1,29 +1,41 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionFromCookies } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 import { nanoid } from "nanoid";
 import { stepsExpediente } from "@/components/stepMetaExpediente";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/nextauth-options";
 
 /**
- * Accepts multipart upload; only valid step/keys from stepsExpediente allowed.
+ * Handles expediente document upload, now ensures only 1 active Document and 1 ChecklistItem per type/user,
+ * and instantly sets Document as "accepted" and ChecklistItem as fulfilled. Also clears any duplicates.
  */
 export async function POST(req, context) {
   const params = await context.params;
   const { userId, type } = params;
-  // Allow all required doc types:
   const allowedTypes = stepsExpediente.filter(s => !s.signable).map(s => s.key);
+
   if (!allowedTypes.includes(type)) {
     return NextResponse.json({ error: "Tipo de documento no permitido." }, { status: 400 });
   }
 
-  const session = getSessionFromCookies(req.cookies);
-  if (!session) return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  const userIdInt = Number(userId);
+  if (!Number.isFinite(userIdInt)) {
+    return NextResponse.json({ error: "ID de usuario inválido." }, { status: 400 });
+  }
 
-  if (session.role === "employee" && session.id !== userId)
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  }
+  if (
+    (session.user.role === "employee" || session.user.role === "candidate") &&
+    String(session.user.id) !== String(userIdInt)
+  ) {
     return NextResponse.json({ error: "Acceso denegado." }, { status: 403 });
+  }
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -36,43 +48,51 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Archivo demasiado grande (>20MB)" }, { status: 400 });
   }
 
-  const folder = path.join(process.cwd(), "storage", "documents", userId);
+  const folder = path.join(process.cwd(), "storage", "documents", String(userIdInt));
   await fs.mkdir(folder, { recursive: true });
   const fname = `${type}-${Date.now()}-${nanoid(8)}.pdf`;
   const dest = path.join(folder, fname);
 
   await fs.writeFile(dest, fileBuff);
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  // Ensure user exists
+  const user = await prisma.user.findUnique({ where: { id: userIdInt } });
   if (!user) {
     await fs.unlink(dest);
     return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
   }
 
-  const old = await prisma.document.findFirst({
-    where: { userId, type, status: { in: ["pending","rejected"] } }
+  // Remove ALL previous Document + ChecklistItem of this user/type (eliminate all possible duplicates)
+  const oldDocs = await prisma.document.findMany({
+    where: { userId: userIdInt, type }
   });
-  if (old) {
-    try { await fs.unlink(path.join(folder, path.basename(old.filePath))); } catch {}
-    await prisma.document.delete({ where: { id: old.id } });
-    await prisma.checklistItem.deleteMany({ where: { userId, type, documentId: old.id } });
+  for (const oldDoc of oldDocs) {
+    try { await fs.unlink(path.join(folder, path.basename(oldDoc.filePath))); } catch {}
+    await prisma.checklistItem.deleteMany({ where: { userId: userIdInt, type, documentId: oldDoc.id } });
+    await prisma.document.delete({ where: { id: oldDoc.id } });
   }
 
+  // Re-check no duplicate ChecklistItem exists (for extreme edge cases)
+  await prisma.checklistItem.deleteMany({ where: { userId: userIdInt, type } });
+
+  // Create Document as instantly "accepted"
   const doc = await prisma.document.create({
     data: {
-      userId,
+      userId: userIdInt,
       type,
-      filePath: `/storage/documents/${userId}/${fname}`,
-      status: "pending",
-    },
+      filePath: `/storage/documents/${userIdInt}/${fname}`,
+      status: "accepted"
+    }
   });
 
+  // ChecklistItem linkage, instantly fulfilled
   const item = await prisma.checklistItem.create({
     data: {
-      userId,
+      userId: userIdInt,
       type,
       required: true,
-      documentId: doc.id,
+      fulfilled: true,
+      documentId: doc.id
     }
   });
 

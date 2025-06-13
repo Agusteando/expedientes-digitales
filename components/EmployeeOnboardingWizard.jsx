@@ -7,6 +7,8 @@ import {
   ArrowLeftCircleIcon, ArrowRightCircleIcon,
   ArrowPathIcon, CheckCircleIcon, XCircleIcon, CloudArrowUpIcon, InformationCircleIcon,
   IdentificationIcon, DocumentTextIcon, BriefcaseIcon, ShieldCheckIcon, AcademicCapIcon, UserCircleIcon, UserGroupIcon, ReceiptRefundIcon, UserPlusIcon, CheckCircleIcon as CheckCircleIconOutline, BookOpenIcon, PencilSquareIcon,
+  DocumentDuplicateIcon,
+  ChatBubbleLeftEllipsisIcon
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "./stepMetaExpediente";
 import { wizardCard, stepperButton, navigationButton, secondaryButton, mainButton } from "../lib/ui-classes";
@@ -29,16 +31,30 @@ const iconMap = {
   CheckCircleIcon: CheckCircleIconOutline,
   BookOpenIcon,
   PencilSquareIcon,
+  DocumentDuplicateIcon,
+  ChatBubbleLeftEllipsisIcon
 };
 
-function statusIcon(status) {
-  if (status === "fulfilled" || status === "accepted" || status === "signed") return <CheckCircleIcon className="text-emerald-500 w-7 h-7" />;
-  if (status === "pending" || status === "signing") return <ArrowPathIcon className="text-yellow-500 w-7 h-7 animate-spin-slow" />;
-  if (status === "rejected") return <XCircleIcon className="text-red-500 w-7 h-7" />;
-  return <InformationCircleIcon className="text-gray-300 w-7 h-7" />;
+function formatDateDisplay(date) {
+  if (!date) return "";
+  try {
+    return new Date(date).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return String(date);
+  }
 }
 
-export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
+function formatStatusIcon(status) {
+  if (status === "fulfilled" || status === "accepted" || status === "signed" || status === "completed")
+    return <CheckCircleIcon className="text-emerald-500 w-5 h-5 inline align-middle" />;
+  if (status === "pending" || status === "signing")
+    return <ArrowPathIcon className="text-yellow-500 w-5 h-5 inline align-middle animate-spin-slow" />;
+  if (status === "rejected")
+    return <XCircleIcon className="text-red-500 w-5 h-5 inline align-middle" />;
+  return <InformationCircleIcon className="text-gray-300 w-5 h-5 inline align-middle" />;
+}
+
+export default function EmployeeOnboardingWizard({ user, steps, stepStatus, stepHistory }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -194,6 +210,10 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
   const status = stepStatus[step.key] || {};
   const { checklist, document, signature } = status;
 
+  // Historical versions from parent prop, newest first
+  const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
+  const latestDoc = historyDocs[0] || null;
+
   function formatStatus(item, isSignable) {
     if (isSignable) {
       if (!item) return { color: "gray", text: "Pendiente" };
@@ -246,44 +266,80 @@ export default function EmployeeOnboardingWizard({ user, steps, stepStatus }) {
           </span>
         </div>
         <div className="flex-1 w-full px-0 flex flex-col gap-3 items-center mt-1 mb-1">
+          {/* Non-signable step, main/latest version */}
           {!step.signable ? (
-            checklist && checklist.documentId && document ? (
+            latestDoc ? (
               <div className="flex flex-col gap-2 items-center w-full">
-                <PdfViewer url={document.filePath} height={380} className="mb-2"/>
-                <div className="flex flex-row gap-2 w-full mb-1 items-center justify-center">
-                  <a href={document.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
+                <PdfViewer url={latestDoc.filePath} height={380} className="mb-2"/>
+                <div className="flex flex-row gap-3 w-full mb-1 items-center justify-center">
+                  <a href={latestDoc.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
                     <CloudArrowUpIcon className="w-5 h-5" />
                     Descargar PDF
                   </a>
-                  <span className="text-xs text-slate-400">{document.uploadedAt ? `Subido ${new Date(document.uploadedAt).toLocaleDateString()}` : null}</span>
+                  <span className="inline-flex items-center px-2 py-1 rounded bg-cyan-50 text-xs text-slate-400 font-mono">
+                    {latestDoc.uploadedAt ? `Subido ${formatDateDisplay(latestDoc.uploadedAt)}` : null}
+                    {latestDoc.version ? <> &nbsp;| v{latestDoc.version}</> : null}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold">
+                    {formatStatusIcon(latestDoc.status)}
+                    {latestDoc.status}
+                  </span>
                 </div>
-                {/* progress, status, and re-upload */}
-                <div className="w-full flex flex-col justify-center items-center">
-                  {checklist.status === "rejected" && checklist.rejectionReason && (
-                    <div className="px-3 py-1 mb-1 bg-red-50 text-red-700 rounded text-xs w-full text-left border border-red-200">
-                      Motivo de rechazo: {checklist.rejectionReason}
+                {/* Reviewer comment for current/latest version */}
+                {latestDoc.reviewComment && (
+                  <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-xs text-fuchsia-900 mt-1 mb-1 shadow-sm max-w-xl w-full">
+                    <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
+                    <span className="break-words">{latestDoc.reviewComment}</span>
+                  </div>
+                )}
+                {/* History Table */}
+                {historyDocs.length > 1 && (
+                  <div className="w-full mt-3 px-1">
+                    <div className="font-bold text-cyan-900 dark:text-cyan-100 mb-1 text-xs flex items-center gap-2">
+                      <DocumentDuplicateIcon className="w-5 h-5 text-cyan-400" />
+                      Versiones anteriores
                     </div>
-                  )}
-                  {(checklist.status === "rejected" || !checklist.fulfilled) && (
-                    <div className="w-full">
-                      <DocumentDropzone
-                        loading={uploading}
-                        error={uploadError}
-                        onFile={handleFileUpload}
-                        accept="application/pdf"
-                      />
-                      {uploadProgress !== null &&
-                        <div className="w-full pt-2">
-                          <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
-                            <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
-                                 style={{width: `${uploadProgress}%`}}></div>
+                    <div className="flex flex-col gap-1 max-h-40 overflow-auto">
+                      {historyDocs.slice(1).map((doc, idx) => (
+                        <div key={doc.id} className="flex flex-col gap-0.5 border border-cyan-50 dark:border-slate-800 py-1 px-2 rounded bg-cyan-50/50 dark:bg-slate-800/30 text-[12px]">
+                          <div className="flex flex-row gap-2 items-center">
+                            <a href={doc.filePath} target="_blank" className="underline text-cyan-800 dark:text-cyan-200 font-bold break-all">{`Versión v${doc.version}`}</a>
+                            <span className="ml-2 text-slate-500">{formatDateDisplay(doc.uploadedAt)}</span>
+                            <span className="inline-flex items-center gap-1 ml-2">
+                              {formatStatusIcon(doc.status)}
+                              {doc.status}
+                            </span>
                           </div>
-                          <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                          {/* Comment for previous version */}
+                          {doc.reviewComment && (
+                            <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
+                              <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
+                              <span className="break-words">{doc.reviewComment}</span>
+                            </div>
+                          )}
                         </div>
-                      }
-                      {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
+                {/* progress, status, and re-upload */}
+                <div className="w-full flex flex-col justify-center items-center mt-3">
+                  <DocumentDropzone
+                    loading={uploading}
+                    error={uploadError}
+                    onFile={handleFileUpload}
+                    accept="application/pdf"
+                  />
+                  {uploadProgress !== null &&
+                    <div className="w-full pt-2">
+                      <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
+                        <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                             style={{width: `${uploadProgress}%`}}></div>
+                      </div>
+                      <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                    </div>
+                  }
+                  {uploadSuccess && <div className="text-emerald-700 mt-2 text-xs font-bold">{uploadSuccess}</div>}
                 </div>
               </div>
             ) : (

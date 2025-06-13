@@ -18,40 +18,39 @@ model Plantel {
   id    Int    @id @default(autoincrement())
   name  String @unique
   users User[]
-  documents Document[]
 }
 
 model User {
-  id             Int       @id @default(autoincrement())
+  id             Int             @id @default(autoincrement())
   name           String
-  email          String    @unique
+  email          String          @unique
   picture        String?
-  passwordHash   String?   // for non-admin/candidate login
-  rfc            String?   // for employees/candidates
-  curp           String?   // for employees/candidates
-  role           Role      @default(candidate)
-  isActive       Boolean   @default(true)
+  passwordHash   String? // for non-admin/candidate login
+  rfc            String?
+  curp           String?
+  role           Role            @default(candidate)
+  isActive       Boolean         @default(true)
   plantelId      Int?
-  plantel        Plantel?  @relation(fields: [plantelId], references: [id])
-  canSign        Boolean   @default(false)
-  isApproved     Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  plantel        Plantel?        @relation(fields: [plantelId], references: [id])
+  canSign        Boolean         @default(false)
+  isApproved     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   documents      Document[]
   checklistItems ChecklistItem[]
   signatures     Signature[]
 }
 
 model Document {
-  id            String          @id @default(cuid())
-  userId        Int
-  user          User            @relation(fields: [userId], references: [id])
-  plantelId     Int
-  plantel       Plantel         @relation(fields: [plantelId], references: [id])
-  type          String
-  status        String          @default("PENDING")
-  filePath      String
-  uploadedAt    DateTime        @default(now())
+  id             String          @id @default(cuid())
+  userId         Int
+  user           User            @relation(fields: [userId], references: [id])
+  type           String
+  status         String          @default("PENDING")
+  filePath       String
+  uploadedAt     DateTime        @default(now())
+  version        Int
+  reviewComment  String?
   checklistItems ChecklistItem[]
 }
 
@@ -59,7 +58,7 @@ model ChecklistItem {
   id         String    @id @default(cuid())
   userId     Int
   user       User      @relation(fields: [userId], references: [id])
-  documentId String?   // optional, assigned after upload
+  documentId String? // optional, assigned after upload
   document   Document? @relation(fields: [documentId], references: [id])
   type       String
   required   Boolean   @default(true)
@@ -70,8 +69,8 @@ model Signature {
   id         String    @id @default(cuid())
   userId     Int
   user       User      @relation(fields: [userId], references: [id])
-  type       String    // "simple" or "advanced"
-  status     String    // "pending", "signed", "failed"
+  type       String
+  status     String
   signedAt   DateTime?
   mifielData Json?
   createdAt  DateTime  @default(now())
