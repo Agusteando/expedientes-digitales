@@ -1,6 +1,6 @@
 
 import { getSessionFromCookies } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import AdminNav from "@/components/admin/AdminNav";
@@ -11,12 +11,27 @@ import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
 
+// Returns absolute URL for server-side fetch (required in Server Actions)
+async function getAbsoluteUrl(path) {
+  const h = await headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") || "http";
+  return `${proto}://${host}${path}`;
+}
+
 // Canonical admin dashboard for both admin and superadmin roles.
 
-export default async function AdminInicioPage({ searchParams }) {
-  const cookiesInstance = cookies();
-  const session = getSessionFromCookies(cookiesInstance);
-  const forceAdminView = searchParams?.adminview === "1";
+export default async function AdminInicioPage(props) {
+  const cookiesInstance = await cookies();
+  const session = await getSessionFromCookies(cookiesInstance); // <-- FIX: await
+
+  let searchParams = props.searchParams;
+  if (searchParams && typeof searchParams.then === "function") {
+    searchParams = await searchParams;
+  }
+  searchParams = searchParams || {};
+
+  const forceAdminView = searchParams.adminview === "1";
 
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     redirect("/admin/login");
@@ -64,11 +79,12 @@ export default async function AdminInicioPage({ searchParams }) {
   // Top summaries for superadmin dashboard
   const showSuperImpersonating = session.role === "superadmin" && forceAdminView;
 
-  // Assignment actions (called from client via fetch; here for SSR context)
+  // Assignment actions (server actions use absolute URLs!)
   async function assignAdminToPlantel(adminId, plantelId, assigned) {
     "use server";
+    const url = await getAbsoluteUrl(`/api/admin/planteles/${plantelId}/assign-admin`);
     const res = await fetch(
-      `/api/admin/planteles/${plantelId}/assign-admin`,
+      url,
       {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -87,8 +103,9 @@ export default async function AdminInicioPage({ searchParams }) {
 
   async function assignUsersToPlantel(assignBatch, plantelId) {
     "use server";
+    const url = await getAbsoluteUrl(`/api/admin/users/assign-plantel`);
     const res = await fetch(
-      "/api/admin/users/assign-plantel",
+      url,
       {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
