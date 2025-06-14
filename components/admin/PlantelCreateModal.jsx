@@ -3,38 +3,34 @@
 import { useState } from "react";
 import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
-export default function PlantelCreateModal({ onCreated }) {
+/**
+ * Props:
+ *   - onCreate (plantelName: string) => Promise
+ *   - onCreated: callback when creation is successful
+ *   - isLoading: boolean for mutation in progress
+ */
+export default function PlantelCreateModal({ onCreate, onCreated, isLoading }) {
   const [open, setOpen] = useState(false);
   const [plantel, setPlantel] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const handleCreate = async () => {
-    setLoading(true); setError(""); setSuccess(false);
+    setError(""); setSuccess(false);
     try {
-      const res = await fetch("/api/admin/planteles/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: plantel.trim() })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "No se pudo crear");
-        setLoading(false);
-        return;
-      }
+      await onCreate(plantel.trim());
       setSuccess(true);
       setPlantel("");
-      setLoading(false);
       setTimeout(() => {
         setOpen(false);
         setSuccess(false);
         if (onCreated) onCreated();
-      }, 1400);
-    } catch {
-      setError("Error de red");
-      setLoading(false);
+      }, 1200);
+    } catch (e) {
+      let err = "";
+      if (typeof e === "object" && e?.message) err = e.message;
+      else if (typeof e === "string") err = e;
+      setError(err || "No se pudo crear");
     }
   };
 
@@ -43,6 +39,7 @@ export default function PlantelCreateModal({ onCreated }) {
       <button
         className="rounded-full font-bold bg-emerald-700 text-white px-4 py-2 flex flex-row items-center gap-2 shadow hover:bg-emerald-900"
         onClick={() => setOpen(true)}
+        type="button"
       >
         <PlusCircleIcon className="w-5 h-5" /> Nuevo Plantel
       </button>
@@ -56,7 +53,8 @@ export default function PlantelCreateModal({ onCreated }) {
               value={plantel}
               onChange={e => setPlantel(e.target.value)}
               autoFocus
-              disabled={loading}
+              disabled={isLoading}
+              type="text"
             />
             <div className="flex flex-col gap-1 py-1">
               {error && <div className="text-sm text-red-700">{error}</div>}
@@ -66,13 +64,16 @@ export default function PlantelCreateModal({ onCreated }) {
               <button
                 className="px-3 py-1 bg-emerald-700 rounded text-white font-bold flex-1"
                 onClick={handleCreate}
-                disabled={!plantel.trim() || loading}
+                disabled={!plantel.trim() || isLoading}
+                type="button"
               >
                 Crear
               </button>
               <button
                 className="px-3 py-1 bg-slate-200 rounded font-bold text-slate-700 flex-1"
                 onClick={() => setOpen(false)}
+                type="button"
+                disabled={isLoading}
               >
                 Cancelar
               </button>
