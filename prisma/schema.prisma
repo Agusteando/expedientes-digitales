@@ -15,30 +15,42 @@ enum Role {
 }
 
 model Plantel {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  users User[]
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  // One-to-many: “employees” (User → Plantel)
+  users User[] @relation("Employees")
+
+  // Many-to-many: “admins” (User ↔ Plantel)
+  admins User[] @relation("PlantelAdmins")
 }
 
 model User {
-  id             Int             @id @default(autoincrement())
-  name           String
-  email          String          @unique
-  picture        String?
-  passwordHash   String? // for non-admin/candidate login
-  rfc            String?
-  curp           String?
-  role           Role            @default(candidate)
-  isActive       Boolean         @default(true)
-  plantelId      Int?
-  plantel        Plantel?        @relation(fields: [plantelId], references: [id])
-  canSign        Boolean         @default(false)
-  isApproved     Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id           Int     @id @default(autoincrement())
+  name         String
+  email        String  @unique
+  picture      String?
+  passwordHash String? // for non-admin/candidate login
+  rfc          String?
+  curp         String?
+  role         Role    @default(candidate)
+  isActive     Boolean @default(true)
+
+  // One-to-many side of “employees”
+  plantelId Int?
+  plantel   Plantel? @relation("Employees", fields: [plantelId], references: [id])
+
+  canSign    Boolean  @default(false)
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   documents      Document[]
   checklistItems ChecklistItem[]
   signatures     Signature[]
+
+  // Many-to-many side of “admins”
+  plantelesAdmin Plantel[] @relation("PlantelAdmins")
 }
 
 model Document {
@@ -58,7 +70,7 @@ model ChecklistItem {
   id         String    @id @default(cuid())
   userId     Int
   user       User      @relation(fields: [userId], references: [id])
-  documentId String? // optional, assigned after upload
+  documentId String?
   document   Document? @relation(fields: [documentId], references: [id])
   type       String
   required   Boolean   @default(true)

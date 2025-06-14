@@ -23,45 +23,46 @@ export async function POST(req) {
     const payload = ticket.getPayload();
     const { email, name, picture } = payload;
 
-    // Strictly enforce @casitaiedis.edu.mx email addresses
+    // Only institutional emails permitted
     if (
       typeof email !== "string" ||
-      !email.endsWith("@casitaiedis.edu.mx")
+      !/@casitaiedis\.edu\.mx$/.test(email)
     ) {
       return NextResponse.json({ error: "Solo administradores IECS-IEDIS autorizados." }, { status: 403 });
     }
 
-    // Is this a pre-seeded superadmin email?
-    let role = "admin";
-    if (superadminSeedEmails.includes(email.toLowerCase())) {
-      role = "superadmin";
-    }
-
-    // If user already exists, use their role (could be "admin" or "superadmin"), else upsert as inferred
+    // Provision logic: superadmin if seeded, else admin
     let user = await prisma.user.findUnique({ where: { email } });
+    let provisionedRole = "admin";
+    if (superadminSeedEmails.map(e => e.trim().toLowerCase()).includes(email.trim().toLowerCase())) {
+      provisionedRole = "superadmin";
+    }
     if (user) {
-      // Only allow admin or superadmin
+      // Only allow admin/superadmin to use this flow
       if (!["admin", "superadmin"].includes(user.role)) {
-        return NextResponse.json({ error: "Acceso restringido solo a administradores." }, { status: 403 });
+        return NextResponse.json({ error: "Acceso restringido solo a administradores institucionales." }, { status: 403 });
       }
-      // Update data
-      user = await prisma.user.update({
-        where: { email },
-        data: {
-          name,
-          picture,
-          isActive: true,
-        }
-      });
+      // If user role is not correct (e.g., employee in DB, real admin): escalate to correct role
+      if (user.role !== provisionedRole) {
+        user = await prisma.user.update({
+          where: { email },
+          data: { role: provisionedRole, name, picture, isActive: true },
+        });
+      } else {
+        user = await prisma.user.update({
+          where: { email },
+          data: { name, picture, isActive: true },
+        });
+      }
     } else {
-      // Provision as superadmin or admin
+      // Create new admin account
       user = await prisma.user.create({
         data: {
           name,
           email,
           picture,
           isActive: true,
-          role: role,
+          role: provisionedRole,
         }
       });
     }

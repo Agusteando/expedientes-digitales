@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-// Simple valids for Mexico's official identifiers
+// Email/curp/rfc validators as before...
 function validEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -40,7 +40,7 @@ export async function POST(req) {
         name,
         email: email.toLowerCase(),
         passwordHash: hash,
-        role: "candidate",
+        role: "candidate", // or "employee" as needed
         isActive: true,
         curp: curp.toUpperCase().trim(),
         rfc: rfc.toUpperCase().trim()
