@@ -1,6 +1,6 @@
 
 "use client";
-import { UserGroupIcon, AcademicCapIcon, BuildingLibraryIcon, ClipboardCheckIcon } from "@heroicons/react/24/outline";
+import { UserGroupIcon, AcademicCapIcon, BuildingLibraryIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 
 export default function AdminDashboardStats({ summary }) {
   // summary = { totalUsers, totalPlanteles, completedExpedientes, percentComplete }
@@ -22,7 +22,7 @@ export default function AdminDashboardStats({ summary }) {
       </div>
       <div className="col-span-2 xs:col-span-1 bg-gradient-to-r from-green-50 via-emerald-50 to-cyan-50 rounded-2xl p-3 sm:p-4 flex flex-col shadow border border-emerald-100 min-w-[124px]">
         <div className="flex flex-row items-center gap-1 text-emerald-800 text-base font-bold">
-          <ClipboardCheckIcon className="w-6 h-6 text-emerald-600 mr-1" />
+          <ClipboardIcon className="w-6 h-6 text-emerald-600 mr-1" />
           Expedientes completos
         </div>
         <div className="font-extrabold text-xl xs:text-2xl tracking-tight text-emerald-800">
