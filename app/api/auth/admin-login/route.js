@@ -7,7 +7,8 @@ import { OAuth2Client } from "google-auth-library";
 const GSI_CLIENT_ID = process.env.NEXT_PUBLIC_GSI_CLIENT_ID;
 const superadminSeedEmails = [
   "desarrollo.tecnologico@casitaiedis.edu.mx",
-  "coord.admon@casitaiedis.edu.mx"
+  "coord.admon@casitaiedis.edu.mx",
+  "rh@casitaiedis.edu.mx" // Added default superadmin
 ];
 
 export async function POST(req) {
