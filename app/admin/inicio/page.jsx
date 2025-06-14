@@ -1,6 +1,6 @@
 
 import { getSessionFromCookies } from "@/lib/auth";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import AdminNav from "@/components/admin/AdminNav";
@@ -11,64 +11,80 @@ import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
 
-// Returns absolute URL for server-side fetch (required in Server Actions)
-async function getAbsoluteUrl(path) {
-  const h = await headers();
-  const host = h.get("host");
-  const proto = h.get("x-forwarded-proto") || "http";
+function getCookieHeader(cookiesArr) {
+  return cookiesArr.map(c => `${c.name}=${c.value}`).join("; ");
+}
+
+function getAbsoluteUrl(path) {
+  const proto = process.env.NEXT_PUBLIC_VERCEL_URL
+    ? "https"
+    : (process.env.NODE_ENV === "production" ? "https" : "http");
+  const host = process.env.NEXT_PUBLIC_VERCEL_URL
+    ? process.env.NEXT_PUBLIC_VERCEL_URL
+    : process.env.HOST || "localhost:3000";
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}${path}`;
   return `${proto}://${host}${path}`;
 }
 
-// Canonical admin dashboard for both admin and superadmin roles.
+export default async function AdminInicioPage({ searchParams }) {
+  // Await cookies and session extraction
+  const cookiesStore = await cookies();
+  const session = await getSessionFromCookies(cookiesStore); // MAIN FIX: add await
 
-export default async function AdminInicioPage(props) {
-  const cookiesInstance = await cookies();
-  const session = await getSessionFromCookies(cookiesInstance); // <-- FIX: await
+  // Await and introspect searchParams
+  const sp = await searchParams;
 
-  let searchParams = props.searchParams;
-  if (searchParams && typeof searchParams.then === "function") {
-    searchParams = await searchParams;
+  // Universal lookup for adminview param (supports both URLSearchParams and plain object)
+  let forceAdminView = false;
+  let spDebugType = typeof sp;
+  let spDebugKeys = Array.isArray(sp) ? sp : Object.keys(sp ?? {});
+  let spAdminviewVal = undefined;
+  if (sp && typeof sp.get === "function") {
+    forceAdminView = sp.get("adminview") === "1";
+    spAdminviewVal = sp.get("adminview");
+  } else if (typeof sp === "object" && sp !== null) {
+    forceAdminView = sp.adminview === "1";
+    spAdminviewVal = sp.adminview;
   }
-  searchParams = searchParams || {};
 
-  const forceAdminView = searchParams.adminview === "1";
+  // Debug logs: begin
+  console.debug("[/admin/inicio] --- DEBUG LOGS ---");
+  console.debug("[/admin/inicio] cookiesStore.getAll():", cookiesStore.getAll());
+  console.debug("[/admin/inicio] session (from getSessionFromCookies):", session);
+  console.debug("[/admin/inicio] typeof searchParams:", typeof searchParams, ", typeof sp (awaited):", spDebugType, ", keys/entries:", spDebugKeys);
+  console.debug("[/admin/inicio] forceAdminView:", forceAdminView, "; spAdminviewVal:", spAdminviewVal);
 
   if (!session || !["admin", "superadmin"].includes(session.role)) {
+    console.warn("[/admin/inicio] redirect: invalid or missing session/role", { session });
     redirect("/admin/login");
   }
 
+  // More logs for flow verification
+  console.debug("[/admin/inicio] Session still valid, role:", session.role, "; superadmin?", session.role === "superadmin", "; forceAdminView?", forceAdminView);
+
   // Data loading
-  // 1. Planteles with admins (for matrix & permissions)
   const plantelesFull = await prisma.plantel.findMany({
     include: { admins: { select: { id: true, name: true, email: true } } },
     orderBy: { name: "asc" }
   });
-
-  // 2. All admin/superadmin users
   const admins = await prisma.user.findMany({
     where: { role: { in: ["admin", "superadmin"] } },
     include: { plantelesAdmin: { select: { id: true } } },
     orderBy: { name: "asc" }
   });
-
-  // 3. All plantel stats (for cards/tables)
   const allPlantelStats = await fetchAllPlantelStats();
-
-  // 4. Unassigned users for assignment table (always fetch all; restrict below)
   const unassignedUsers = await fetchUnassignedUsers();
 
-  // --- Role handling
   let plantelData;
   if (session.role === "superadmin" && !forceAdminView) {
-    // Superadmin: see all
     plantelData = allPlantelStats;
+    console.debug("[/admin/inicio] PlantelData: allPlantelStats (superadmin view)");
   } else {
-    // Admin (or superadmin as admin): see only planteles they manage (by plantelesAdminIds)
     const ids = session.plantelesAdminIds || [];
     plantelData = allPlantelStats.filter(p => ids.includes(p.id));
+    console.debug("[/admin/inicio] PlantelData: filtered for plantelesAdminIds:", ids);
   }
 
-  // Aggregate stats
   let totalUsers = 0, completedExpedientes = 0, totalPlanteles = plantelData.length;
   plantelData.forEach(p => {
     totalUsers += p.progress.total;
@@ -76,17 +92,26 @@ export default async function AdminInicioPage(props) {
   });
   const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
 
-  // Top summaries for superadmin dashboard
   const showSuperImpersonating = session.role === "superadmin" && forceAdminView;
 
-  // Assignment actions (server actions use absolute URLs!)
+  // More logs for rendering outcome
+  console.debug("[/admin/inicio] Render outcome: showSuperImpersonating?", showSuperImpersonating);
+
+  // --- Server actions
   async function assignAdminToPlantel(adminId, plantelId, assigned) {
     "use server";
-    const url = await getAbsoluteUrl(`/api/admin/planteles/${plantelId}/assign-admin`);
+    const url = getAbsoluteUrl(`/api/admin/planteles/${plantelId}/assign-admin`);
+    const cookiesArr = await cookies().getAll();
+    const cookieHeader = getCookieHeader(cookiesArr);
+    console.debug("[assignAdminToPlantel] POST", url, { adminId, plantelId, assigned, cookieHeader });
     const res = await fetch(
       url,
       {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cookie": cookieHeader,
+        },
         body: JSON.stringify({
           adminUserId: adminId,
           action: assigned ? "remove" : "add"
@@ -96,6 +121,7 @@ export default async function AdminInicioPage(props) {
     );
     if (!res.ok) {
       const data = await res.json();
+      console.error("[assignAdminToPlantel] Error", data);
       throw new Error(data?.error || "Error asignando admin.");
     }
     return true;
@@ -103,11 +129,18 @@ export default async function AdminInicioPage(props) {
 
   async function assignUsersToPlantel(assignBatch, plantelId) {
     "use server";
-    const url = await getAbsoluteUrl(`/api/admin/users/assign-plantel`);
+    const url = getAbsoluteUrl("/api/admin/users/assign-plantel");
+    const cookiesArr = await cookies().getAll();
+    const cookieHeader = getCookieHeader(cookiesArr);
+    console.debug("[assignUsersToPlantel] POST", url, { assignBatch, plantelId, cookieHeader });
     const res = await fetch(
       url,
       {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cookie": cookieHeader,
+        },
         body: JSON.stringify({
           userIds: assignBatch.map(u => u.id),
           plantelId
@@ -117,6 +150,7 @@ export default async function AdminInicioPage(props) {
     );
     if (!res.ok) {
       const data = await res.json();
+      console.error("[assignUsersToPlantel] Error", data);
       throw new Error(data?.error || "No se pudo asignar usuarios.");
     }
     return true;
