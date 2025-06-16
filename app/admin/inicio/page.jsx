@@ -10,10 +10,14 @@ import PlantelAssignmentTable from "@/components/admin/PlantelAssignmentTable";
 import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
+import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
 
 export default async function AdminInicioPage({ searchParams }) {
   const cookiesStore = await cookies();
   const session = await getSessionFromCookies(cookiesStore);
+
+  // LOG: show what session is just before rendering nav
+  console.log("[page.jsx] Server session before <AdminNav />:", session);
 
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     redirect("/admin/login");
@@ -63,6 +67,7 @@ export default async function AdminInicioPage({ searchParams }) {
             Vista limitada: Modo administrador de plantel (estás en modo superadmin)
           </div>
         )}
+
         <AdminDashboardStats
           summary={{
             totalUsers,
@@ -71,14 +76,21 @@ export default async function AdminInicioPage({ searchParams }) {
             percentComplete,
           }}
         />
+
+        {/* Superadmin Plantel CRUD UI */}
         {session.role === "superadmin" && !forceAdminView && (
           <>
+            <PlantelListAdminPanelClient
+              initialPlanteles={plantelesFull}
+              onRefresh={null}
+            />
             <PlantelAdminMatrix
               planteles={plantelesFull}
               admins={admins}
             />
           </>
         )}
+
         <div className="grid xs:grid-cols-2 md:grid-cols-3 gap-3 w-full mt-5">
           {plantelData.map(plantel =>
             <PlantelStatsCard key={plantel.id} plantel={plantel} />

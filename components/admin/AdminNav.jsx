@@ -5,6 +5,8 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export default function AdminNav({ session }) {
+  // LOG: show role clearly for every nav render
+  console.log("[AdminNav.jsx] session prop:", session);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -26,6 +28,8 @@ export default function AdminNav({ session }) {
         Expedientes Digitales
       </a>
       <div className="flex items-center gap-3">
+        {/* LOG: show why dropdown renders or not */}
+        {console.log("[AdminNav] session.role:", session?.role)}
         {session.role === "superadmin" && (
           <div className="relative" ref={dropdownRef}>
             <button
