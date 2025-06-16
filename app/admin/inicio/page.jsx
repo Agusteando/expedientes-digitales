@@ -1,6 +1,6 @@
 
-import { getSessionFromCookies } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getSessionFromCookies } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import AdminNav from "@/components/admin/AdminNav";
@@ -10,10 +10,6 @@ import PlantelAssignmentTable from "@/components/admin/PlantelAssignmentTable";
 import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
-
-function getCookieHeader(cookiesArr) {
-  return cookiesArr.map(c => `${c.name}=${c.value}`).join("; ");
-}
 
 function getAbsoluteUrl(path) {
   const proto = process.env.NEXT_PUBLIC_VERCEL_URL
@@ -26,65 +22,94 @@ function getAbsoluteUrl(path) {
   return `${proto}://${host}${path}`;
 }
 
+function getCookieHeader(cookiesArr) {
+  // Defensive logging
+  console.debug("[getCookieHeader] cookiesArr:", cookiesArr);
+  return cookiesArr.map(c => `${c.name}=${c.value}`).join("; ");
+}
+
 export default async function AdminInicioPage({ searchParams }) {
-  // Await cookies and session extraction
-  const cookiesStore = await cookies();
-  const session = await getSessionFromCookies(cookiesStore); // MAIN FIX: add await
+  // --- Load YOUR custom session from the session-token cookie
+  const cookiesStore = cookies();
+  const cookiesArr = cookiesStore.getAll();
+  const session = await getSessionFromCookies(cookiesStore);
 
-  // Await and introspect searchParams
-  const sp = await searchParams;
+  // Debug: Print all cookies visible to this SSR process
+  console.log("[/admin/inicio] --- DEBUG LOGS ---");
+  console.log("[/admin/inicio] cookiesStore.getAll():", cookiesArr);
 
-  // Universal lookup for adminview param (supports both URLSearchParams and plain object)
-  let forceAdminView = false;
-  let spDebugType = typeof sp;
-  let spDebugKeys = Array.isArray(sp) ? sp : Object.keys(sp ?? {});
-  let spAdminviewVal = undefined;
-  if (sp && typeof sp.get === "function") {
-    forceAdminView = sp.get("adminview") === "1";
-    spAdminviewVal = sp.get("adminview");
-  } else if (typeof sp === "object" && sp !== null) {
-    forceAdminView = sp.adminview === "1";
-    spAdminviewVal = sp.adminview;
-  }
+  // DEBUG: Print session object
+  console.log("[/admin/inicio] session (from getSessionFromCookies):", session);
 
-  // Debug logs: begin
-  console.debug("[/admin/inicio] --- DEBUG LOGS ---");
-  console.debug("[/admin/inicio] cookiesStore.getAll():", cookiesStore.getAll());
-  console.debug("[/admin/inicio] session (from getSessionFromCookies):", session);
-  console.debug("[/admin/inicio] typeof searchParams:", typeof searchParams, ", typeof sp (awaited):", spDebugType, ", keys/entries:", spDebugKeys);
-  console.debug("[/admin/inicio] forceAdminView:", forceAdminView, "; spAdminviewVal:", spAdminviewVal);
-
+  // Redirect if not legit admin/superadmin
   if (!session || !["admin", "superadmin"].includes(session.role)) {
-    console.warn("[/admin/inicio] redirect: invalid or missing session/role", { session });
+    console.log("[/admin/inicio] No valid custom session, redirecting to /admin/login");
     redirect("/admin/login");
   }
 
-  // More logs for flow verification
-  console.debug("[/admin/inicio] Session still valid, role:", session.role, "; superadmin?", session.role === "superadmin", "; forceAdminView?", forceAdminView);
+  // Determine impersonation view mode based on searchParams
+  let forceAdminView = false;
+  let spAdminviewVal = undefined;
+  if (typeof searchParams?.get === "function") {
+    spAdminviewVal = searchParams.get("adminview");
+    forceAdminView = spAdminviewVal === "1";
+  } else if (typeof searchParams === "object" && searchParams !== null) {
+    spAdminviewVal = searchParams.adminview;
+    forceAdminView = spAdminviewVal === "1";
+  }
+  console.log(
+    "[/admin/inicio] typeof searchParams:",
+    typeof searchParams,
+    ", typeof sp (awaited):",
+    typeof searchParams,
+    ", keys/entries:",
+    Object.keys(searchParams || {}),
+  );
+  console.log(
+    "[/admin/inicio] forceAdminView:",
+    forceAdminView,
+    "; spAdminviewVal:",
+    spAdminviewVal,
+  );
 
-  // Data loading
+  // Print user/role context at render
+  console.log(
+    "[/admin/inicio] Session still valid, role:",
+    session.role,
+    "; superadmin?",
+    session.role === "superadmin",
+    "; forceAdminView?",
+    forceAdminView
+  );
+
+  // --- Data loading
   const plantelesFull = await prisma.plantel.findMany({
     include: { admins: { select: { id: true, name: true, email: true } } },
     orderBy: { name: "asc" }
   });
+
   const admins = await prisma.user.findMany({
     where: { role: { in: ["admin", "superadmin"] } },
     include: { plantelesAdmin: { select: { id: true } } },
     orderBy: { name: "asc" }
   });
+
   const allPlantelStats = await fetchAllPlantelStats();
+
   const unassignedUsers = await fetchUnassignedUsers();
 
+  // --- Which planteles are visible?
   let plantelData;
   if (session.role === "superadmin" && !forceAdminView) {
     plantelData = allPlantelStats;
-    console.debug("[/admin/inicio] PlantelData: allPlantelStats (superadmin view)");
+    console.log("[/admin/inicio] PlantelData: allPlantelStats (superadmin view)");
   } else {
     const ids = session.plantelesAdminIds || [];
     plantelData = allPlantelStats.filter(p => ids.includes(p.id));
-    console.debug("[/admin/inicio] PlantelData: filtered for plantelesAdminIds:", ids);
+    console.log("[/admin/inicio] PlantelData: admin impersonation view - ids:", ids);
   }
 
+  // --- Compute dashboard stats for display
   let totalUsers = 0, completedExpedientes = 0, totalPlanteles = plantelData.length;
   plantelData.forEach(p => {
     totalUsers += p.progress.total;
@@ -94,67 +119,120 @@ export default async function AdminInicioPage({ searchParams }) {
 
   const showSuperImpersonating = session.role === "superadmin" && forceAdminView;
 
-  // More logs for rendering outcome
-  console.debug("[/admin/inicio] Render outcome: showSuperImpersonating?", showSuperImpersonating);
-
   // --- Server actions
+
   async function assignAdminToPlantel(adminId, plantelId, assigned) {
     "use server";
     const url = getAbsoluteUrl(`/api/admin/planteles/${plantelId}/assign-admin`);
-    const cookiesArr = await cookies().getAll();
+    // Must await cookies() (Next.js 14 dynamic API)
+    const cs = await cookies();
+    const cookiesArr = cs.getAll();
     const cookieHeader = getCookieHeader(cookiesArr);
-    console.debug("[assignAdminToPlantel] POST", url, { adminId, plantelId, assigned, cookieHeader });
-    const res = await fetch(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "cookie": cookieHeader,
-        },
-        body: JSON.stringify({
-          adminUserId: adminId,
-          action: assigned ? "remove" : "add"
-        }),
-        cache: "no-store",
-      }
-    );
+
+    // Debug log all context
+    console.debug("[assignAdminToPlantel] POST", url, {
+      adminId, plantelId, assigned, cookieHeader
+    });
+
+    // Make the request, always with cookies for session
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cookie": cookieHeader
+      },
+      body: JSON.stringify({
+        adminUserId: adminId,
+        action: assigned ? "remove" : "add"
+      }),
+      cache: "no-store",
+    });
+
+    // Print full fetch response context for debugging
+    console.debug("[assignAdminToPlantel] response status", res.status, "; headers:", Array.from(res.headers.entries()));
+
     if (!res.ok) {
-      const data = await res.json();
+      // Defensive: don't parse as JSON if not JSON
+      let data = {};
+      try {
+        if (res.headers.get("content-type")?.includes("application/json")) {
+          data = await res.json();
+        } else {
+          data = { error: "Non-JSON API error (likely session invalid or redirect): " + (await res.text()) };
+        }
+      } catch (err) {
+        data = { error: "Failed to parse error body" };
+      }
       console.error("[assignAdminToPlantel] Error", data);
       throw new Error(data?.error || "Error asignando admin.");
     }
+
+    // Optional: read response data/confirmation
+    let resp;
+    try {
+      if (res.headers.get("content-type")?.includes("application/json")) {
+        resp = await res.json();
+      }
+    } catch {}
+    console.debug("[assignAdminToPlantel] Success response:", resp);
     return true;
   }
 
   async function assignUsersToPlantel(assignBatch, plantelId) {
     "use server";
     const url = getAbsoluteUrl("/api/admin/users/assign-plantel");
-    const cookiesArr = await cookies().getAll();
+    const cs = await cookies();
+    const cookiesArr = cs.getAll();
     const cookieHeader = getCookieHeader(cookiesArr);
-    console.debug("[assignUsersToPlantel] POST", url, { assignBatch, plantelId, cookieHeader });
-    const res = await fetch(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "cookie": cookieHeader,
-        },
-        body: JSON.stringify({
-          userIds: assignBatch.map(u => u.id),
-          plantelId
-        }),
-        cache: "no-store",
-      }
-    );
+
+    // Debug context log
+    console.debug("[assignUsersToPlantel] POST", url, {
+      userIds: assignBatch.map(u => u.id),
+      plantelId,
+      cookieHeader
+    });
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cookie": cookieHeader
+      },
+      body: JSON.stringify({
+        userIds: assignBatch.map(u => u.id),
+        plantelId
+      }),
+      cache: "no-store",
+    });
+
+    console.debug("[assignUsersToPlantel] response status", res.status, "; headers:", Array.from(res.headers.entries()));
     if (!res.ok) {
-      const data = await res.json();
+      let data = {};
+      try {
+        if (res.headers.get("content-type")?.includes("application/json")) {
+          data = await res.json();
+        } else {
+          data = { error: "Non-JSON API error (likely session invalid or redirect): " + (await res.text()) };
+        }
+      } catch {
+        data = { error: "Failed to parse error body" };
+      }
       console.error("[assignUsersToPlantel] Error", data);
       throw new Error(data?.error || "No se pudo asignar usuarios.");
     }
+
+    let resp;
+    try {
+      if (res.headers.get("content-type")?.includes("application/json")) {
+        resp = await res.json();
+      }
+    } catch {}
+    console.debug("[assignUsersToPlantel] Success response:", resp);
     return true;
   }
+
+  // --- Outer logs for verification
+  console.log("[/admin/inicio] Render outcome: showSuperImpersonating?", showSuperImpersonating);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
@@ -195,7 +273,7 @@ export default async function AdminInicioPage({ searchParams }) {
         )}
 
         {/* Admins (or superadmin in admin impersonation mode): show assignment for only their users */}
-        {((session.role === "admin") || showSuperImpersonating) && (
+        {(session.role === "admin" || showSuperImpersonating) && (
           <PlantelAssignmentTable
             users={unassignedUsers.filter(u => u.plantelId === null)}
             planteles={plantelData}
