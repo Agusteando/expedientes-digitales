@@ -6,7 +6,8 @@ import { getSessionFromCookies } from "@/lib/auth";
 export async function PATCH(req, context) {
   const params = await context.params;
   const { plantelId } = params;
-  const session = getSessionFromCookies(req.cookies);
+  const session = await getSessionFromCookies(req.cookies);
+  console.debug("[planteles/:plantelId][PATCH] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
 
   if (!session || session.role !== "superadmin") {
     return NextResponse.json({ error: "Solo superadmin puede renombrar planteles." }, { status: 403 });
@@ -31,7 +32,8 @@ export async function PATCH(req, context) {
 export async function DELETE(req, context) {
   const params = await context.params;
   const { plantelId } = params;
-  const session = getSessionFromCookies(req.cookies);
+  const session = await getSessionFromCookies(req.cookies);
+  console.debug("[planteles/:plantelId][DELETE] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
 
   if (!session || session.role !== "superadmin") {
     return NextResponse.json({ error: "Solo superadmin puede borrar planteles." }, { status: 403 });

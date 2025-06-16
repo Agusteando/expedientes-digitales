@@ -4,11 +4,10 @@ import prisma from "@/lib/prisma";
 import { getSessionFromCookies } from "@/lib/auth";
 
 // POST: { userIds: [...], plantelId }
-export async function POST(req) {
-  const session = getSessionFromCookies(req.cookies);
-  if (!session || !["superadmin", "admin"].includes(session.role)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+export async function POST(req, context) {
+  const session = await getSessionFromCookies(req.cookies);
+  // Extremely minimal log
+  console.debug("[users/assign-plantel][POST] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
   let data;
   try {
     data = await req.json();

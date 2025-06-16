@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromCookies } from "@/lib/auth";
 
-export async function GET(req) {
-  const session = getSessionFromCookies(req.cookies);
+export async function GET(req, context) {
+  const session = await getSessionFromCookies(req.cookies);
+  console.debug("[planteles/list][GET] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
   if (!session || !["superadmin", "admin"].includes(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
@@ -12,8 +13,9 @@ export async function GET(req) {
   return NextResponse.json(planteles);
 }
 
-export async function POST(req) {
-  const session = getSessionFromCookies(req.cookies);
+export async function POST(req, context) {
+  const session = await getSessionFromCookies(req.cookies);
+  console.debug("[planteles/list][POST] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
   if (!session || session.role !== "superadmin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
