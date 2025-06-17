@@ -68,6 +68,8 @@ export default async function AdminInicioPage({ searchParams }) {
     }
   }
   const adminMultiplePlanteles = assignablePlanteles.length > 1;
+  // The following prop is used to display approve actions for admin/superadmin
+  const enableApproval = session.role === "admin" || session.role === "superadmin";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
@@ -88,7 +90,7 @@ export default async function AdminInicioPage({ searchParams }) {
           }}
         />
 
-        {/* Employee-to-plantel assignment section */}
+        {/* Employee/candidate to plantel assignment section */}
         <AssignEmployeesSectionClient
           unassignedUsers={unassignedUsers}
           planteles={assignablePlanteles}
@@ -118,11 +120,11 @@ export default async function AdminInicioPage({ searchParams }) {
           )}
         </div>
         <div className="pt-7 w-full">
-          <h2 className="text-xl font-bold text-cyan-700 pb-3">Progreso de empleados por plantel</h2>
+          <h2 className="text-xl font-bold text-cyan-700 pb-3">Progreso de empleados y candidatos por plantel</h2>
           {plantelData.map(plantel =>
             <div key={plantel.id} className="mb-8 border-b border-cyan-100 pb-6">
               <div className="font-bold text-base text-cyan-800 mb-2">{plantel.name}</div>
-              <PlantelEmployeeProgressTable employees={plantel.employees} />
+              <PlantelEmployeeProgressTable employees={plantel.employees} adminCanApprove={enableApproval} />
             </div>
           )}
         </div>

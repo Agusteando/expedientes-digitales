@@ -12,7 +12,6 @@ export default function AssignEmployeesSection({
   defaultAssignPlantelId,
   onAssign
 }) {
-  // Filter/search
   const [filter, setFilter] = useState("");
   const filteredUsers = !filter.trim()
     ? unassignedUsers
@@ -21,7 +20,6 @@ export default function AssignEmployeesSection({
         u.email?.toLowerCase().includes(filter.trim().toLowerCase())
       );
 
-  // Per-user selection state
   const [selection, setSelection] = useState({});
   const selectedUserIds = filteredUsers.filter(u => selection[u.id]).map(u => u.id);
   const allSelected = filteredUsers.length > 0 && filteredUsers.every(u => !!selection[u.id]);
@@ -39,23 +37,15 @@ export default function AssignEmployeesSection({
     else next[user.id] = true;
     setSelection(next);
   }
-
-  // Plantel assignment context
-  // For superadmin: dropdown for planteles.
-  // For admin: fixed plantel, or (if >1 plantel) dropdown context.
   const isSuperadmin = userRole === "superadmin";
   const adminCanChoosePlantel = !isSuperadmin && multiplePlantelesForAdmin;
   const canBulkAssign = selectedUserIds.length > 0;
   const [targetPlantelId, setTargetPlantelId] = useState(defaultAssignPlantelId || "");
-  // clear plantel assign on role/planteles switch
-  // useMemo to update on admins multi-plantel switch: NO (will manually manage)
 
-  // Success/error messaging
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  // Assign call
   async function doAssign() {
     setError(""); setSuccess("");
     if (!canBulkAssign) {
@@ -69,25 +59,23 @@ export default function AssignEmployeesSection({
     setLoading(true);
     try {
       await onAssign({ userIds: selectedUserIds, plantelId: targetPlantelId });
-      setSuccess("Empleados asignados correctamente.");
+      setSuccess("Usuarios asignados correctamente.");
       setSelection({});
       setTimeout(() => setSuccess(""), 1600);
+      window.location.reload();
     } catch (e) {
-      setError((e?.message) || "No se pudo asignar empleados.");
+      setError((e?.message) || "No se pudo asignar usuarios.");
     }
     setLoading(false);
   }
 
-  // Default to first plantel if only one (for admin)
   useMemo(() => {
     if (!isSuperadmin && !targetPlantelId && planteles.length === 1) {
       setTargetPlantelId(String(planteles[0].id));
     }
   }, [isSuperadmin, planteles.length]);
 
-  // "Suggested" plantel logic - for demo, just show empty/single
   function getSuggestedPlantel(u) {
-    // Could use email domain, HR data, etc. Here: show empty or only one
     if (planteles.length === 1) return planteles[0];
     return null;
   }
@@ -96,12 +84,11 @@ export default function AssignEmployeesSection({
     <section className="w-full bg-white border border-cyan-200 rounded-2xl shadow-xl px-4 py-6 mb-8">
       <header className="font-bold text-cyan-800 text-base mb-4 flex items-center gap-2">
         <UserPlusIcon className="w-6 h-6 text-cyan-400 mr-1" />
-        Asignar empleados a plantel
+        Asignar empleados y candidatos a plantel
         <span className="ml-2 px-2 py-0.5 text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full">
-          Unassigned: {unassignedUsers.length}
+          Sin asignar: {unassignedUsers.length}
         </span>
       </header>
-      {/* Plantel control block */}
       <div className="flex flex-wrap items-center gap-4 mb-3">
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1">
           <MagnifyingGlassIcon className="w-4 h-4 text-slate-400" />
@@ -143,7 +130,7 @@ export default function AssignEmployeesSection({
           </div>
         )}
         <button
-          className={"flex flex-row gap-1 items-center px-3 py-1 rounded-full font-bold text-xs border transition " + 
+          className={"flex flex-row gap-1 items-center px-3 py-1 rounded-full font-bold text-xs border transition " +
             (allSelected ? "bg-cyan-800 text-white border-cyan-800" : "bg-white border-cyan-900 text-cyan-900 hover:bg-cyan-50")}
           onClick={allSelected ? unselectAll : selectAll}
           type="button"
@@ -165,6 +152,7 @@ export default function AssignEmployeesSection({
               <th className="px-2 py-1 text-left">#</th>
               <th className="px-2 py-1 text-left">Nombre</th>
               <th className="px-2 py-1 text-left">Correo</th>
+              <th className="px-2 py-1 text-left">Rol</th>
               {isSuperadmin && <th className="px-2 py-1 text-left">Sugerido</th>}
               <th className="px-2 py-1 text-center">Seleccionar</th>
             </tr>
@@ -173,11 +161,19 @@ export default function AssignEmployeesSection({
             {filteredUsers.map((u, idx) => {
               const isSelected = !!selection[u.id];
               const suggested = isSuperadmin ? getSuggestedPlantel(u) : null;
+              let roleDisplay = u.role === "employee"
+                ? <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Empleado</span>
+                : u.role === "candidate"
+                  ? (u.isApproved
+                      ? <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-full">Candidato aprobado</span>
+                      : <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">Candidato</span>)
+                  : <span className="text-xs text-slate-500">{u.role}</span>;
               return (
                 <tr key={u.id} className={`border-b border-cyan-50 hover:bg-cyan-50/30 ${isSelected ? "bg-cyan-50" : ""}`}>
                   <td className="px-2 py-1">{isSelected ? <CheckCircleIcon className="inline w-4 h-4 text-emerald-500" /> : idx + 1}</td>
                   <td className="px-2 py-1 font-semibold">{u.name}</td>
                   <td className="px-2 py-1">{u.email}</td>
+                  <td className="px-2 py-1">{roleDisplay}</td>
                   {isSuperadmin && (
                     <td className="px-2 py-1">
                       {suggested
@@ -200,7 +196,7 @@ export default function AssignEmployeesSection({
             })}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={isSuperadmin ? 5 : 4} className="text-center text-slate-400 py-5">No se encontraron usuarios.</td>
+                <td colSpan={isSuperadmin ? 6 : 5} className="text-center text-slate-400 py-5">No se encontraron usuarios.</td>
               </tr>
             )}
           </tbody>
@@ -220,7 +216,7 @@ export default function AssignEmployeesSection({
         {error && <span className="font-bold text-red-600">{error}</span>}
       </div>
       <div className="pt-2 text-xs text-slate-600">
-        Selecciona usuarios para asignar al plantel. Solo puedes asignar empleados que aún no pertenecen a ningún plantel.
+        Selecciona empleados o candidatos no asignados para asignar al plantel.
       </div>
     </section>
   );
