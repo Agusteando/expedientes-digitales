@@ -25,25 +25,34 @@ export default function Login() {
     setSuccess(null);
 
     try {
-      const result = await signIn("credentials", {
+      // Use proper provider id "login"
+      const result = await signIn("login", {
         redirect: false,
         email: form.email,
         password: form.password,
+        // If needed, stay on /empleado on error
+        callbackUrl: "/expediente"
       });
 
       setPending(false);
 
       if (!result.ok) {
+        // NextAuth 4 returns .error if thrown on authorize
         setError(result.error || "Usuario o contraseña incorrectos.");
         return;
       }
       setSuccess("Inicio de sesión exitoso.");
       setTimeout(() => {
-        router.replace("/expediente");
+        router.replace(result.url || "/expediente");
       }, 800);
     } catch (err) {
       setPending(false);
       setError("No se pudo contactar el servidor.");
+      if (typeof window !== "undefined") {
+        // Defensive logging for bad NextAuth client error
+        // eslint-disable-next-line no-console
+        console.error("[EMP LOGIN SUBMIT]", err);
+      }
     }
   }
 

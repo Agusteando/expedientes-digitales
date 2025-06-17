@@ -41,16 +41,23 @@ export async function DELETE(req, context) {
   const plantelIdInt = parseInt(plantelId, 10);
   if (isNaN(plantelIdInt)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
-  const userOrAdminAssigned = await prisma.user.count({
-    where: {
-      OR: [
-        { plantelId: plantelIdInt },
-        { plantelesAdmin: { some: { id: plantelIdInt } } }
-      ]
-    }
+  // Enhanced debug: list assigned users/admins
+  const usersAssigned = await prisma.user.findMany({
+    where: { plantelId: plantelIdInt },
+    select: { id: true, name: true, email: true }
   });
-  if (userOrAdminAssigned > 0) {
-    return NextResponse.json({ error: "No se puede eliminar un plantel con usuarios/asignaciones." }, { status: 400 });
+  const adminsAssigned = await prisma.user.findMany({
+    where: { plantelesAdmin: { some: { id: plantelIdInt } } },
+    select: { id: true, name: true, email: true }
+  });
+  console.debug("[planteles/:plantelId][DELETE] assigned users:", usersAssigned);
+  console.debug("[planteles/:plantelId][DELETE] assigned admins:", adminsAssigned);
+
+  if (usersAssigned.length > 0 || adminsAssigned.length > 0) {
+    return NextResponse.json({
+      error: "No se puede eliminar un plantel con usuarios/asignaciones.",
+      usersAssigned, adminsAssigned
+    }, { status: 400 });
   }
 
   await prisma.plantel.delete({ where: { id: plantelIdInt } });

@@ -6,18 +6,15 @@ import prisma from "@/lib/prisma";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import PlantelAdminMatrix from "@/components/admin/PlantelAdminMatrix";
-import PlantelAssignmentTable from "@/components/admin/PlantelAssignmentTable";
 import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
+import AssignEmployeesSectionClient from "@/components/admin/AssignEmployeesSectionClient";
 
 export default async function AdminInicioPage({ searchParams }) {
   const cookiesStore = await cookies();
   const session = await getSessionFromCookies(cookiesStore);
-
-  // LOG: show what session is just before rendering nav
-  console.log("[page.jsx] Server session before <AdminNav />:", session);
 
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     redirect("/admin/login");
@@ -27,19 +24,20 @@ export default async function AdminInicioPage({ searchParams }) {
   const spAdminviewVal = sp?.adminview;
   const forceAdminView = spAdminviewVal === "1";
 
+  // For all roles
   const plantelesFull = await prisma.plantel.findMany({
     include: { admins: { select: { id: true, name: true, email: true } } },
     orderBy: { name: "asc" }
   });
+  const allPlantelStats = await fetchAllPlantelStats();
+  const unassignedUsers = await fetchUnassignedUsers();
 
+  // For admin
   const admins = await prisma.user.findMany({
     where: { role: { in: ["admin", "superadmin"] } },
     include: { plantelesAdmin: { select: { id: true } } },
     orderBy: { name: "asc" }
   });
-
-  const allPlantelStats = await fetchAllPlantelStats();
-  const unassignedUsers = await fetchUnassignedUsers();
 
   let plantelData;
   if (session.role === "superadmin" && !forceAdminView) {
@@ -57,6 +55,19 @@ export default async function AdminInicioPage({ searchParams }) {
   const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
 
   const showSuperImpersonating = session.role === "superadmin" && forceAdminView;
+
+  // For admin, get planteles they can assign.
+  let assignablePlanteles = [];
+  let defaultAssignPlantelId = null;
+  if (session.role === "superadmin" && !forceAdminView) {
+    assignablePlanteles = plantelesFull;
+  } else {
+    assignablePlanteles = plantelesFull.filter(p => (session.plantelesAdminIds || []).includes(p.id));
+    if (assignablePlanteles.length === 1) {
+      defaultAssignPlantelId = String(assignablePlanteles[0].id);
+    }
+  }
+  const adminMultiplePlanteles = assignablePlanteles.length > 1;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
@@ -77,7 +88,17 @@ export default async function AdminInicioPage({ searchParams }) {
           }}
         />
 
-        {/* Superadmin Plantel CRUD UI */}
+        {/* Employee-to-plantel assignment section */}
+        <AssignEmployeesSectionClient
+          unassignedUsers={unassignedUsers}
+          planteles={assignablePlanteles}
+          userRole={session.role}
+          adminPlantelIds={session.plantelesAdminIds || []}
+          multiplePlantelesForAdmin={adminMultiplePlanteles}
+          defaultAssignPlantelId={defaultAssignPlantelId}
+        />
+
+        {/* Superadmin-only Plantel Admin Matrix and CRUD */}
         {session.role === "superadmin" && !forceAdminView && (
           <>
             <PlantelListAdminPanelClient
