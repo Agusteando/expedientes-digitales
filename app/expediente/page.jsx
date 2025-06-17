@@ -1,19 +1,30 @@
 
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/nextauth-options";
+"use client";
+import { useSession } from "next-auth/react";
 import EmployeeOnboardingWizard from "@/components/EmployeeOnboardingWizard";
 
-export default async function ExpedientePage() {
-  const session = await getServerSession(authOptions);
+export default function ExpedientePage() {
+  const { data: session, status } = useSession();
 
-  if (!session || !session.user || !["employee", "candidate"].includes(session.user.role)) {
-    return null;
+  if (status === "loading") {
+    return (
+      <div className="flex w-full min-h-[60vh] justify-center items-center">
+        <span className="text-slate-500 text-lg font-bold">Cargando expediente...</span>
+      </div>
+    );
   }
+
+  if (!session?.user || !["employee", "candidate"].includes(session.user.role)) {
+    return (
+      <div className="flex w-full min-h-[60vh] justify-center items-center">
+        <span className="text-red-600 text-lg font-bold">No autorizado. Inicia sesión como empleado o candidato.</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full min-h-[80vh] justify-center items-start px-0 sm:px-1 py-1">
-      <EmployeeOnboardingWizard
-        user={session.user}
-      />
+      <EmployeeOnboardingWizard user={session.user} />
     </div>
   );
 }
