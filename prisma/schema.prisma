@@ -26,31 +26,33 @@ model Plantel {
 }
 
 model User {
-  id           Int     @id @default(autoincrement())
-  name         String
-  email        String  @unique
-  picture      String?
-  passwordHash String? // for non-admin/candidate login
-  rfc          String?
-  curp         String?
-  role         Role    @default(candidate)
-  isActive     Boolean @default(true)
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  picture         String?
+  passwordHash    String?
+  rfc             String?
+  curp            String?
+  // Ficha técnica fields:
+  domicilioFiscal String?
+  fechaIngreso    DateTime?
+  puesto          String?
+  sueldo          Decimal?
+  horarioLaboral  String?
+  // End ficha
 
-  // One-to-many side of “employees”
-  plantelId Int?
-  plantel   Plantel? @relation("Employees", fields: [plantelId], references: [id])
-
-  canSign    Boolean  @default(false)
-  isApproved Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  role           Role            @default(candidate)
+  isActive       Boolean         @default(true)
+  plantelId      Int?
+  plantel        Plantel?        @relation("Employees", fields: [plantelId], references: [id])
+  canSign        Boolean         @default(false)
+  isApproved     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   documents      Document[]
   checklistItems ChecklistItem[]
   signatures     Signature[]
-
-  // Many-to-many side of “admins”
-  plantelesAdmin Plantel[] @relation("PlantelAdmins")
+  plantelesAdmin Plantel[]       @relation("PlantelAdmins")
 }
 
 model Document {

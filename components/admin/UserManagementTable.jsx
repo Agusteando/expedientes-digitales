@@ -15,7 +15,8 @@ export default function UserManagementTable({
   onSelectAll,
   onAssignPlantel,
   onApproveCandidate,
-  onDocs
+  onDocs,
+  onFichaTecnica
 }) {
   return (
     <div className="overflow-x-auto mb-3">
@@ -57,6 +58,7 @@ export default function UserManagementTable({
               onAssignPlantel={onAssignPlantel}
               onApproveCandidate={onApproveCandidate}
               onDocs={onDocs}
+              onFichaTecnica={onFichaTecnica}
             />
           ))}
         </tbody>

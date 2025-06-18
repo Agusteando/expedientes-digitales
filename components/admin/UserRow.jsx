@@ -1,6 +1,6 @@
 
 "use client";
-import { CheckCircleIcon, EyeIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, EyeIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
 export default function UserRow({
@@ -13,12 +13,12 @@ export default function UserRow({
   onSelect,
   onAssignPlantel,
   onApproveCandidate,
-  onDocs
+  onDocs,
+  onFichaTecnica
 }) {
   function canAdminAssignTo(pid) {
     return role === "superadmin" || adminsPlanteles.includes(pid);
   }
-
   const canBeApproved = user.role === "candidate" && user.readyForApproval;
 
   return (
@@ -96,13 +96,20 @@ export default function UserRow({
               )
         }
       </td>
-      <td className="px-2 py-2">
+      <td className="px-2 py-2 flex flex-row gap-1 items-center">
         <button
           className="hover:bg-cyan-100 px-2 py-1 rounded-full"
           onClick={() => onDocs(user)}
           aria-label="Ver documentos"
         >
           <EyeIcon className="w-5 h-5 text-cyan-700" />
+        </button>
+        <button
+          className="hover:bg-cyan-100 px-2 py-1 rounded-full"
+          onClick={() => onFichaTecnica(user)}
+          aria-label="Abrir ficha técnica"
+        >
+          <ClipboardDocumentListIcon className="w-5 h-5 text-fuchsia-700" />
         </button>
       </td>
       <td className="px-2 py-2 text-center">

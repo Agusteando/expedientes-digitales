@@ -4,18 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import UserManagementTable from "./UserManagementTable";
 import BulkActionBar from "./BulkActionBar";
 import UserDocsDrawer from "./UserDocsDrawer";
+import UserFichaTecnicaDrawer from "./UserFichaTecnicaDrawer";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 
-/**
- * UserManagementPanel
- * - Loads user data, planteles, handles search/filter/select logic, orchestrates everything.
- * - Props:
- *   - users: [{...}] - List of users (candidates/employees) with plantel/status info
- *   - planteles: [{id, name}]
- *   - adminRole: "admin" | "superadmin"
- *   - plantelesPermittedIds: []
- *   - canAssignPlantel: boolean (new)
- */
 export default function UserManagementPanel({
   users,
   planteles,
@@ -29,11 +20,14 @@ export default function UserManagementPanel({
   const [statusFilter, setStatusFilter] = useState("all");
   const [selection, setSelection] = useState({});
   const [docsDrawer, setDocsDrawer] = useState({ open: false, user: null });
+  const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
   const [feedback, setFeedback] = useState({ type: null, message: "" });
 
   const adminsPlanteles = adminRole === "superadmin"
     ? planteles.map(p => p.id)
     : plantelesPermittedIds || [];
+
+  const editablePlanteles = planteles.filter(p => adminsPlanteles.includes(p.id));
 
   const usersFiltered = useMemo(() => {
     return (users || [])
@@ -66,7 +60,6 @@ export default function UserManagementPanel({
     else
       setSelection({});
   }
-
   async function handleAssignPlantel(userId, plantelId) {
     setFeedback({ type: "info", message: "Asignando..." });
     try {
@@ -83,7 +76,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-
   async function handleApproveCandidate(userId) {
     setFeedback({ type: "info", message: "Aprobando..." });
     try {
@@ -98,7 +90,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-
   async function handleBulkAssign(plantelId) {
     setFeedback({ type: "info", message: "Asignando en lote..." });
     try {
@@ -131,11 +122,10 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-
-  async function handleOpenDocs(user) {
-    setDocsDrawer({ open: true, user });
-  }
+  function handleOpenDocs(user) { setDocsDrawer({ open: true, user }); }
   function closeDocsDrawer() { setDocsDrawer({ open: false, user: null }); }
+  function handleOpenFichaTecnica(user) { setFichaDrawer({ open: true, user }); }
+  function closeFichaDrawer() { setFichaDrawer({ open: false, user: null }); }
 
   return (
     <section className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-8">
@@ -199,6 +189,7 @@ export default function UserManagementPanel({
         onAssignPlantel={handleAssignPlantel}
         onApproveCandidate={handleApproveCandidate}
         onDocs={handleOpenDocs}
+        onFichaTecnica={handleOpenFichaTecnica}
       />
       <BulkActionBar
         users={usersFiltered}
@@ -214,6 +205,14 @@ export default function UserManagementPanel({
         open={docsDrawer.open}
         user={docsDrawer.user}
         onClose={closeDocsDrawer}
+      />
+      <UserFichaTecnicaDrawer
+        open={fichaDrawer.open}
+        user={fichaDrawer.user}
+        planteles={planteles}
+        canEdit={fichaDrawer.open && fichaDrawer.user && (adminRole === "superadmin" || adminsPlanteles.includes(fichaDrawer.user.plantelId))}
+        editablePlanteles={editablePlanteles}
+        onClose={closeFichaDrawer}
       />
     </section>
   );
