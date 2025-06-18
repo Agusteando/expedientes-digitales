@@ -30,7 +30,7 @@ const iconMap = {
 };
 
 export default function EmployeeOnboardingWizard({ user: userProp, mode = "expediente" }) {
-  // Always reflect latest userProp.rfc and userProp.curp (read from server/session)
+  // Always reflect latest userProp.rfc, userProp.curp, userProp.email (read from server/session)
   const [user, setUser] = useState(userProp);
   const [currentStep, setCurrentStep] = useState(0);
   const [loadingData, setLoadingData] = useState(true);
@@ -87,8 +87,10 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     fetchExpedienteSteps();
   }, [user.id]);
 
-  // PATCH plantel/rfc/curp (merged)
-  async function savePlantelCurpRfc({ plantelId, curp, rfc }) {
+  // PATCH handler for plantel, curp, rfc, email together
+  async function savePlantelCurpRfcEmail({
+    plantelId, curp, rfc, email, onSuccess, onError
+  }) {
     setSavingPlantel(true);
     setFetchError("");
     try {
@@ -102,6 +104,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         const pdata = await pRes.json();
         setFetchError(pdata?.error || "No se pudo seleccionar plantel.");
         setSavingPlantel(false);
+        onError && onError(pdata?.error);
         return;
       }
       // PATCH /api/me/curp-rfc
@@ -114,19 +117,36 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         const data = await cRes.json();
         setFetchError(data?.error || "No se pudo actualizar RFC/CURP.");
         setSavingPlantel(false);
+        onError && onError(data?.error);
+        return;
+      }
+      // PATCH /api/me/email
+      const eRes = await fetch("/api/me/email", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!eRes.ok) {
+        const edata = await eRes.json();
+        setFetchError(edata?.error || "No se pudo actualizar correo electrónico.");
+        setSavingPlantel(false);
+        onError && onError(edata?.error);
         return;
       }
       setUser(u => ({
         ...u,
         plantelId: parseInt(plantelId, 10),
         rfc: rfc.trim().toUpperCase(),
-        curp: curp.trim().toUpperCase()
+        curp: curp.trim().toUpperCase(),
+        email: email.trim()
       }));
       setSavingPlantel(false);
       fetchExpedienteSteps();
+      onSuccess && onSuccess();
     } catch {
       setFetchError("No se pudo conectar.");
       setSavingPlantel(false);
+      onError && onError("No se pudo conectar.");
     }
   }
 
@@ -229,7 +249,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const latestDoc = historyDocs[0] || null;
 
   // Compute if allowed to skip to next based on fulfilled steps
-  const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp;
+  const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
   const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
   const isCurrentStepFulfilled = step.signable
     ? (signature && (signature.status === "signed" || signature.status === "completed"))
@@ -298,10 +318,11 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
                 plantelId={user.plantelId}
                 rfc={user.rfc}
                 curp={user.curp}
+                email={user.email}
                 planteles={planteles}
                 loading={loadingData}
                 error={fetchError}
-                onSave={savePlantelCurpRfc}
+                onSave={savePlantelCurpRfcEmail}
                 saving={savingPlantel}
               />
             ) : step.key === "foto_digital" ? (
