@@ -10,7 +10,6 @@ import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
 import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
-import AssignEmployeesSectionClient from "@/components/admin/AssignEmployeesSectionClient";
 
 export default async function AdminInicioPage({ searchParams }) {
   const cookiesStore = await cookies();
@@ -24,12 +23,11 @@ export default async function AdminInicioPage({ searchParams }) {
     );
   }
 
-  // Existing stats, planteles, etc
+  // KPIs and legacy admin data
   const sp = await searchParams;
   const spAdminviewVal = sp?.adminview;
   const forceAdminView = spAdminviewVal === "1";
 
-  // For all roles
   const plantelesFull = await prisma.plantel.findMany({
     include: { admins: { select: { id: true, name: true, email: true } } },
     orderBy: { name: "asc" }
@@ -37,7 +35,6 @@ export default async function AdminInicioPage({ searchParams }) {
   const allPlantelStats = await fetchAllPlantelStats();
   const unassignedUsers = await fetchUnassignedUsers();
 
-  // For admin
   const admins = await prisma.user.findMany({
     where: { role: { in: ["admin", "superadmin"] } },
     include: { plantelesAdmin: { select: { id: true } } },
@@ -74,15 +71,12 @@ export default async function AdminInicioPage({ searchParams }) {
   const adminMultiplePlanteles = assignablePlanteles.length > 1;
   const enableApproval = session.role === "admin" || session.role === "superadmin";
 
-  // ----- Begin new UserManagementPanel block: -----
-
-  // Fetch all planteles (id, name) for assignment panel
+  // ------ New UserManagementPanel block only ------
   const planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true }
   });
 
-  // Users for management (all or scope by role)
   const scopedPlantelIds = session.role === "superadmin"
     ? planteles.map(p => p.id)
     : session.plantelesAdminIds || [];
@@ -99,7 +93,6 @@ export default async function AdminInicioPage({ searchParams }) {
     orderBy: { name: "asc" }
   });
 
-  // Map checklist/contract/approval meta for each user efficiently
   const userIds = users.map(u => u.id);
   const allChecklist = await prisma.checklistItem.findMany({
     where: { userId: { in: userIds }, required: true },
@@ -135,29 +128,13 @@ export default async function AdminInicioPage({ searchParams }) {
     };
   });
 
-  // ----- End new UserManagementPanel block -----
+  // ------ End new UserManagementPanel block ------
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
       <AdminNav session={session} />
       <div className="w-full max-w-7xl mt-20">
-
-        {/* EPIC: New assignment/approval panel */}
-        <UserManagementPanel
-          users={usersFull}
-          planteles={planteles}
-          adminRole={session.role}
-          plantelesPermittedIds={session.plantelesAdminIds}
-        />
-
-        {/* Existing dashboard stats and admin features follow: */}
-
-        {showSuperImpersonating && (
-          <div className="text-sm px-4 py-2 my-2 rounded bg-cyan-100 text-cyan-800 font-bold border border-cyan-200 shadow">
-            Vista limitada: Modo administrador de plantel (estás en modo superadmin)
-          </div>
-        )}
-
+        {/* KPIs at the top */}
         <AdminDashboardStats
           summary={{
             totalUsers,
@@ -167,15 +144,20 @@ export default async function AdminInicioPage({ searchParams }) {
           }}
         />
 
-        {/* Legacy assignment/bulk, still available if needed */}
-        <AssignEmployeesSectionClient
-          unassignedUsers={unassignedUsers}
-          planteles={assignablePlanteles}
-          userRole={session.role}
-          adminPlantelIds={session.plantelesAdminIds || []}
-          multiplePlantelesForAdmin={adminMultiplePlanteles}
-          defaultAssignPlantelId={defaultAssignPlantelId}
+        {/* ONLY the new epic assignment panel */}
+        <UserManagementPanel
+          users={usersFull}
+          planteles={planteles}
+          adminRole={session.role}
+          plantelesPermittedIds={session.plantelesAdminIds}
+          canAssignPlantel={session.role === "superadmin"}
         />
+
+        {showSuperImpersonating && (
+          <div className="text-sm px-4 py-2 my-2 rounded bg-cyan-100 text-cyan-800 font-bold border border-cyan-200 shadow">
+            Vista limitada: Modo administrador de plantel (estás en modo superadmin)
+          </div>
+        )}
 
         {/* Superadmin-only Plantel Admin Matrix and CRUD */}
         {session.role === "superadmin" && !forceAdminView && (

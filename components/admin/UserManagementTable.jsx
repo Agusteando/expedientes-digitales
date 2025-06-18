@@ -2,9 +2,6 @@
 "use client";
 import UserRow from "./UserRow";
 
-/**
- * Renders the user table with inline plantel assign, approve, selection, docs buttons
- */
 export default function UserManagementTable({
   users,
   planteles,
@@ -13,6 +10,7 @@ export default function UserManagementTable({
   selection,
   selectedUserIds,
   allSelected,
+  canAssignPlantel,
   onSelectUser,
   onSelectAll,
   onAssignPlantel,
@@ -54,6 +52,7 @@ export default function UserManagementTable({
               adminsPlanteles={adminsPlanteles}
               role={role}
               selected={!!selection[u.id]}
+              canAssignPlantel={canAssignPlantel}
               onSelect={checked => onSelectUser(u.id, checked)}
               onAssignPlantel={onAssignPlantel}
               onApproveCandidate={onApproveCandidate}

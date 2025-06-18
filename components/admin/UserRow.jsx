@@ -1,6 +1,6 @@
 
 "use client";
-import { CheckCircleIcon, XMarkIcon, EyeIcon, BuildingLibraryIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, EyeIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
 export default function UserRow({
@@ -9,6 +9,7 @@ export default function UserRow({
   adminsPlanteles,
   role,
   selected,
+  canAssignPlantel,
   onSelect,
   onAssignPlantel,
   onApproveCandidate,
@@ -18,7 +19,6 @@ export default function UserRow({
     return role === "superadmin" || adminsPlanteles.includes(pid);
   }
 
-  // Candidates eligible for approval
   const canBeApproved = user.role === "candidate" && user.readyForApproval;
 
   return (
@@ -51,26 +51,32 @@ export default function UserRow({
         </div>
       </td>
       <td className="px-2 py-2">
-        <select
-          className="rounded border-cyan-200 px-2 py-1 text-xs bg-white"
-          value={user.plantelId || ""}
-          onChange={e => onAssignPlantel(user.id, e.target.value)}
-          disabled={role === "admin"
-            ? !canAdminAssignTo(Number(e.target.value))
-            : false}
-        >
-          <option value="">Sin plantel</option>
-          {planteles.map(p => (
-            <option
-              key={p.id}
-              value={p.id}
-              disabled={role === "admin" && !canAdminAssignTo(p.id)}
-            >{p.name}</option>
-          ))}
-        </select>
+        {canAssignPlantel ? (
+          <select
+            className="rounded border-cyan-200 px-2 py-1 text-xs bg-white"
+            value={user.plantelId || ""}
+            onChange={e => onAssignPlantel(user.id, e.target.value)}
+            disabled={role === "admin"
+              ? !canAdminAssignTo(Number(e.target.value))
+              : false}
+          >
+            <option value="">Sin plantel</option>
+            {planteles.map(p => (
+              <option
+                key={p.id}
+                value={p.id}
+                disabled={role === "admin" && !canAdminAssignTo(p.id)}
+              >{p.name}</option>
+            ))}
+          </select>
+        ) : (
+          <span>
+            {planteles.find(p => String(p.id) === String(user.plantelId))?.name ||
+              <span className="text-slate-400 italic">Sin plantel</span>}
+          </span>
+        )}
       </td>
       <td className="px-2 py-2">
-        {/* For epic: show progression/ready/approveable */}
         {user.role === "employee"
           ? (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 font-bold text-emerald-800 rounded-full text-xs">

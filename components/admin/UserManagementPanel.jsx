@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import UserManagementTable from "./UserManagementTable";
 import BulkActionBar from "./BulkActionBar";
 import UserDocsDrawer from "./UserDocsDrawer";
-import { CheckCircleIcon, XCircleIcon, EyeIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 
 /**
  * UserManagementPanel
@@ -13,13 +13,15 @@ import { CheckCircleIcon, XCircleIcon, EyeIcon } from "@heroicons/react/24/outli
  *   - users: [{...}] - List of users (candidates/employees) with plantel/status info
  *   - planteles: [{id, name}]
  *   - adminRole: "admin" | "superadmin"
- *   - plantelesPermittedIds: []   (admin can only assign inside these planteles)
+ *   - plantelesPermittedIds: []
+ *   - canAssignPlantel: boolean (new)
  */
 export default function UserManagementPanel({
   users,
   planteles,
   adminRole,
-  plantelesPermittedIds
+  plantelesPermittedIds,
+  canAssignPlantel
 }) {
   const [filter, setFilter] = useState("");
   const [plantelFilter, setPlantelFilter] = useState("");
@@ -27,8 +29,6 @@ export default function UserManagementPanel({
   const [statusFilter, setStatusFilter] = useState("all");
   const [selection, setSelection] = useState({});
   const [docsDrawer, setDocsDrawer] = useState({ open: false, user: null });
-
-  // Server feedback
   const [feedback, setFeedback] = useState({ type: null, message: "" });
 
   const adminsPlanteles = adminRole === "superadmin"
@@ -51,7 +51,6 @@ export default function UserManagementPanel({
       );
   }, [users, filter, plantelFilter, roleFilter, statusFilter]);
 
-  // Selection logic
   const selectedUserIds = useMemo(
     () => Object.entries(selection).filter(([k,v]) => v).map(([k]) => Number(k)),
     [selection]
@@ -68,7 +67,6 @@ export default function UserManagementPanel({
       setSelection({});
   }
 
-  // Handler for per-user plantel assignment (inline dropdown)
   async function handleAssignPlantel(userId, plantelId) {
     setFeedback({ type: "info", message: "Asignando..." });
     try {
@@ -86,7 +84,6 @@ export default function UserManagementPanel({
     }
   }
 
-  // Handler for per-user approval (promote candidate to employee)
   async function handleApproveCandidate(userId) {
     setFeedback({ type: "info", message: "Aprobando..." });
     try {
@@ -102,7 +99,6 @@ export default function UserManagementPanel({
     }
   }
 
-  // Bulk assign
   async function handleBulkAssign(plantelId) {
     setFeedback({ type: "info", message: "Asignando en lote..." });
     try {
@@ -119,8 +115,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-
-  // Bulk approve
   async function handleBulkApprove() {
     setFeedback({ type: "info", message: "Aprobando..." });
     try {
@@ -138,13 +132,11 @@ export default function UserManagementPanel({
     }
   }
 
-  // Handler for per-user docs view
   async function handleOpenDocs(user) {
     setDocsDrawer({ open: true, user });
   }
   function closeDocsDrawer() { setDocsDrawer({ open: false, user: null }); }
 
-  // Permissions: adminsPlanteles (plantelId list)
   return (
     <section className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-8">
       <header className="mb-4">
@@ -201,6 +193,7 @@ export default function UserManagementPanel({
         selection={selection}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
+        canAssignPlantel={canAssignPlantel}
         onSelectUser={handleSelectUser}
         onSelectAll={handleSelectAll}
         onAssignPlantel={handleAssignPlantel}
@@ -213,6 +206,7 @@ export default function UserManagementPanel({
         adminRole={adminRole}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
+        canAssignPlantel={canAssignPlantel}
         onBulkAssign={handleBulkAssign}
         onBulkApprove={handleBulkApprove}
       />

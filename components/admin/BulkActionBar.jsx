@@ -1,10 +1,10 @@
 
 "use client";
 import { useState } from "react";
-import { BuildingLibraryIcon, ArrowUpTrayIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 
 /**
- * BulkActionBar: sticky or static on bottom/top for bulk assign/approve
+ * BulkActionBar respects canAssignPlantel prop
  */
 export default function BulkActionBar({
   users,
@@ -12,6 +12,7 @@ export default function BulkActionBar({
   adminRole,
   selectedUserIds,
   allSelected,
+  canAssignPlantel,
   onBulkAssign,
   onBulkApprove
 }) {
@@ -28,24 +29,28 @@ export default function BulkActionBar({
         )}
       </span>
       <div className="flex flex-row gap-2 items-center">
-        <select
-          className="rounded border-cyan-200 px-2 py-1 text-xs bg-white"
-          value={bulkPlantelId}
-          onChange={e => setBulkPlantelId(e.target.value)}
-        >
-          <option value="">Asignar a plantel...</option>
-          {planteles.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="bg-cyan-700 hover:bg-cyan-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
-          disabled={!canBulkAssign || !bulkPlantelId}
-          onClick={() => onBulkAssign(bulkPlantelId)}
-        >
-          <BuildingLibraryIcon className="w-4 h-4" />Asignar
-        </button>
+        {canAssignPlantel && (
+          <>
+            <select
+              className="rounded border-cyan-200 px-2 py-1 text-xs bg-white"
+              value={bulkPlantelId}
+              onChange={e => setBulkPlantelId(e.target.value)}
+            >
+              <option value="">Asignar a plantel...</option>
+              {planteles.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="bg-cyan-700 hover:bg-cyan-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
+              disabled={!canBulkAssign || !bulkPlantelId}
+              onClick={() => onBulkAssign(bulkPlantelId)}
+            >
+              <BuildingLibraryIcon className="w-4 h-4" />Asignar
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="bg-emerald-700 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
