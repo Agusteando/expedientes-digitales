@@ -58,7 +58,8 @@ async function createFichaPDF(user) {
 }
 
 export async function GET(req, context) {
-  const { userId } = context.params;
+  const params = await context.params;
+  const { userId } = params;
   const session = await getSessionFromCookies(req.cookies);
   if (!session || !["superadmin", "admin"].includes(session.role))
     return new NextResponse("No autorizado", { status: 403 });

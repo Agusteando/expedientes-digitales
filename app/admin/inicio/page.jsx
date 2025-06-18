@@ -7,9 +7,32 @@ import AdminNav from "@/components/admin/AdminNav";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import PlantelAdminMatrix from "@/components/admin/PlantelAdminMatrix";
 import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
-import PlantelEmployeeProgressTable from "@/components/admin/PlantelEmployeeProgressTable";
-import { fetchAllPlantelStats, fetchUnassignedUsers } from "@/lib/admin/plantelStats";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
+import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
+
+// Utility to calculate “complete expediente”
+function isUserExpedienteComplete(user) {
+  // All ficha fields (rfc, curp, domicilioFiscal, fechaIngreso, puesto, sueldo, horarioLaboral, plantelId) must be non-empty
+  const fichaFields = [user.rfc, user.curp, user.domicilioFiscal, user.fechaIngreso, user.puesto, user.sueldo, user.horarioLaboral, user.plantelId];
+  const fichaOk = fichaFields.every(f => !!f && String(f).trim().length > 0);
+
+  // All required checklist items fulfilled
+  const requiredKeys = new Set((require("@/components/stepMetaExpediente").stepsExpediente || [])
+    .filter(s => !s.signable && !s.isPlantelSelection)
+    .map(s => s.key));
+  const checklistOk = Array.from(requiredKeys).every(key =>
+    user.checklistItems?.some(item => item.type === key && item.fulfilled));
+
+  // Both reglamento and contrato signatures must exist and be signed/completed
+  const regSig = user.signatures?.find(s => s.type === "reglamento");
+  const contSig = user.signatures?.find(s => s.type === "contrato");
+  const firmasOk =
+    regSig && ["signed", "completed"].includes(regSig.status) &&
+    contSig && ["signed", "completed"].includes(contSig.status);
+
+  // Must be assigned to a plantel via plantelId
+  return fichaOk && checklistOk && firmasOk && !!user.plantelId;
+}
 
 export default async function AdminInicioPage({ searchParams }) {
   const cookiesStore = await cookies();
@@ -23,64 +46,18 @@ export default async function AdminInicioPage({ searchParams }) {
     );
   }
 
-  // KPIs and legacy admin data
-  const sp = await searchParams;
-  const spAdminviewVal = sp?.adminview;
-  const forceAdminView = spAdminviewVal === "1";
-
-  const plantelesFull = await prisma.plantel.findMany({
-    include: { admins: { select: { id: true, name: true, email: true } } },
-    orderBy: { name: "asc" }
-  });
-  const allPlantelStats = await fetchAllPlantelStats();
-  const unassignedUsers = await fetchUnassignedUsers();
-
-  const admins = await prisma.user.findMany({
-    where: { role: { in: ["admin", "superadmin"] } },
-    include: { plantelesAdmin: { select: { id: true } } },
-    orderBy: { name: "asc" }
-  });
-
-  let plantelData;
-  if (session.role === "superadmin" && !forceAdminView) {
-    plantelData = allPlantelStats;
-  } else {
-    const ids = session.plantelesAdminIds || [];
-    plantelData = allPlantelStats.filter(p => ids.includes(p.id));
-  }
-
-  let totalUsers = 0, completedExpedientes = 0, totalPlanteles = plantelData.length;
-  plantelData.forEach(p => {
-    totalUsers += p.progress.total;
-    completedExpedientes += p.progress.completed;
-  });
-  const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
-
-  const showSuperImpersonating = session.role === "superadmin" && forceAdminView;
-
-  let assignablePlanteles = [];
-  let defaultAssignPlantelId = null;
-  if (session.role === "superadmin" && !forceAdminView) {
-    assignablePlanteles = plantelesFull;
-  } else {
-    assignablePlanteles = plantelesFull.filter(p => (session.plantelesAdminIds || []).includes(p.id));
-    if (assignablePlanteles.length === 1) {
-      defaultAssignPlantelId = String(assignablePlanteles[0].id);
-    }
-  }
-  const adminMultiplePlanteles = assignablePlanteles.length > 1;
-  const enableApproval = session.role === "admin" || session.role === "superadmin";
-
-  // ------ New UserManagementPanel block only ------
+  // Planteles for scope & all admin panels
   const planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true }
   });
 
+  const plantelesMap = Object.fromEntries(planteles.map(p => [p.id, p.name]));
   const scopedPlantelIds = session.role === "superadmin"
     ? planteles.map(p => p.id)
     : session.plantelesAdminIds || [];
 
+  // Users: get all/employees/candidates for in-scope planteles
   const users = await prisma.user.findMany({
     where: {
       isActive: true,
@@ -88,47 +65,91 @@ export default async function AdminInicioPage({ searchParams }) {
       ...(session.role === "admin" ? { plantelId: { in: scopedPlantelIds } } : {})
     },
     select: {
-      id: true, name: true, email: true, picture: true, role: true, isApproved: true, plantelId: true
+      id: true, name: true, email: true, picture: true, role: true, isApproved: true, plantelId: true,
+      rfc: true, curp: true, domicilioFiscal: true, fechaIngreso: true, puesto: true, sueldo: true, horarioLaboral: true,
     },
     orderBy: { name: "asc" }
   });
 
   const userIds = users.map(u => u.id);
+  // Checklist items per user
   const allChecklist = await prisma.checklistItem.findMany({
     where: { userId: { in: userIds }, required: true },
-    select: { id: true, userId: true, fulfilled: true }
+    select: { id: true, userId: true, fulfilled: true, type: true }
   });
-  const allContratoSign = await prisma.signature.findMany({
-    where: { userId: { in: userIds }, type: "contrato" },
-    select: { id: true, userId: true, status: true }
+  // Signatures per user
+  const allSigs = await prisma.signature.findMany({
+    where: { userId: { in: userIds } },
+    select: { id: true, userId: true, type: true, status: true }
   });
-
+  // Group checklist and sigs by user
   const byUserChecklist = {};
   for (const c of allChecklist) {
-    if (!byUserChecklist[c.userId]) byUserChecklist[c.userId] = { required: 0, fulfilled: 0 };
-    byUserChecklist[c.userId].required += 1;
-    if (c.fulfilled) byUserChecklist[c.userId].fulfilled += 1;
+    (byUserChecklist[c.userId] ||= []).push(c);
   }
-  const byUserContrato = {};
-  for (const s of allContratoSign) {
-    if (!byUserContrato[s.userId]) byUserContrato[s.userId] = false;
-    if (["signed", "completed"].includes(s.status)) byUserContrato[s.userId] = true;
+  const byUserSigs = {};
+  for (const s of allSigs) {
+    (byUserSigs[s.userId] ||= []).push(s);
   }
-  const usersFull = users.map(u => {
-    const check = byUserChecklist[u.id] || { required: 0, fulfilled: 0 };
-    const contratoSigned = !!byUserContrato[u.id];
-    const readyForApproval =
-      u.role === "candidate" &&
-      !u.isApproved &&
-      (check.required > 0 && check.required === check.fulfilled) &&
-      contratoSigned;
-    return {
-      ...u,
-      readyForApproval
-    };
+
+  // For augmented panels, each user must include checklistItems, signatures
+  const usersFull = users.map(u => ({
+    ...u,
+    checklistItems: byUserChecklist[u.id] || [],
+    signatures: byUserSigs[u.id] || []
+  }));
+
+  // For plantel progress: Aggregate by plantel (map)
+  const plantelData = planteles
+    .filter(p => session.role === "superadmin" || scopedPlantelIds.includes(p.id))
+    .map(p => {
+      const pUsers = usersFull.filter(u => u.plantelId === p.id);
+      // advanced progress
+      let completed = 0, readyToApprove = 0;
+      pUsers.forEach(u => {
+        if (isUserExpedienteComplete(u)) completed++;
+        // Candidates ready if checklist/contract/reglamento valid (re-using your prior logic is fine)
+        const check = u.checklistItems || [];
+        const stepsReq = require("@/components/stepMetaExpediente").stepsExpediente.filter(s => !s.signable && !s.isPlantelSelection);
+        const checklistOk = stepsReq.every(st =>
+          check.find(c => c.type === st.key && c.fulfilled));
+        const regSig = u.signatures?.find(s => s.type === "reglamento");
+        const contSig = u.signatures?.find(s => s.type === "contrato");
+        const firmasOk =
+          regSig && ["signed", "completed"].includes(regSig.status) &&
+          contSig && ["signed", "completed"].includes(contSig.status);
+        if (u.role === "candidate" && checklistOk && firmasOk) readyToApprove++;
+      });
+      return {
+        id: p.id, name: p.name,
+        progress: {
+          total: pUsers.length,
+          completed,
+          readyToApprove
+        },
+        employees: pUsers
+      };
+    });
+
+  // KPIs
+  let totalUsers = 0, completedExpedientes = 0, totalPlanteles = plantelData.length;
+  plantelData.forEach(p => {
+    totalUsers += p.progress.total;
+    completedExpedientes += p.progress.completed;
+  });
+  const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
+
+  // For management/assignment panel:
+  const adminRole = session.role;
+  const adminPlantelesPermittedIds = session.plantelesAdminIds;
+
+  const admins = await prisma.user.findMany({
+    where: { role: { in: ["admin", "superadmin"] } },
+    include: { plantelesAdmin: { select: { id: true } } },
+    orderBy: { name: "asc" }
   });
 
-  // ------ End new UserManagementPanel block ------
+  // Plantel list CRUD/matrix etc can remain per your prior design—leave as per last working code if not removed.
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
@@ -144,49 +165,31 @@ export default async function AdminInicioPage({ searchParams }) {
           }}
         />
 
-        {/* ONLY the new epic assignment panel */}
+        {/* Epic management panel for assignment/ficha/etc */}
         <UserManagementPanel
           users={usersFull}
           planteles={planteles}
-          adminRole={session.role}
-          plantelesPermittedIds={session.plantelesAdminIds}
+          adminRole={adminRole}
+          plantelesPermittedIds={adminPlantelesPermittedIds}
           canAssignPlantel={session.role === "superadmin"}
         />
 
-        {showSuperImpersonating && (
-          <div className="text-sm px-4 py-2 my-2 rounded bg-cyan-100 text-cyan-800 font-bold border border-cyan-200 shadow">
-            Vista limitada: Modo administrador de plantel (estás en modo superadmin)
-          </div>
-        )}
+        {/* --- Epic new Progreso por Plantel section --- */}
+        <PlantelProgressPanel planteles={plantelData} />
 
-        {/* Superadmin-only Plantel Admin Matrix and CRUD */}
-        {session.role === "superadmin" && !forceAdminView && (
+        {/* Retain superadmin-only plantel CRUD/admin matrix below */}
+        {session.role === "superadmin" && (
           <>
             <PlantelListAdminPanelClient
-              initialPlanteles={plantelesFull}
+              initialPlanteles={planteles}
               onRefresh={null}
             />
             <PlantelAdminMatrix
-              planteles={plantelesFull}
+              planteles={planteles}
               admins={admins}
             />
           </>
         )}
-
-        <div className="grid xs:grid-cols-2 md:grid-cols-3 gap-3 w-full mt-5">
-          {plantelData.map(plantel =>
-            <PlantelStatsCard key={plantel.id} plantel={plantel} />
-          )}
-        </div>
-        <div className="pt-7 w-full">
-          <h2 className="text-xl font-bold text-cyan-700 pb-3">Progreso de empleados y candidatos por plantel</h2>
-          {plantelData.map(plantel =>
-            <div key={plantel.id} className="mb-8 border-b border-cyan-100 pb-6">
-              <div className="font-bold text-base text-cyan-800 mb-2">{plantel.name}</div>
-              <PlantelEmployeeProgressTable employees={plantel.employees} adminCanApprove={enableApproval} />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -5,7 +6,7 @@ import Link from "next/link";
 export default function FloatingWhatsappButton() {
   return (
     <Link
-      href="https://wa.me/5210000000000"
+      href="https://wa.me/5217291065569"
       target="_blank"
       rel="noopener noreferrer"
       className="fixed bottom-8 right-8 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-[#25D366] hover:brightness-110
