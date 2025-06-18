@@ -1,6 +1,20 @@
 
 export const stepsExpediente = [
   {
+    key: "plantel",
+    isPlantelSelection: true,
+    label: "Selecciona tu Plantel",
+    description: "Selecciona tu plantel asignado. Esto es necesario para continuar el proceso.",
+  },
+  {
+    key: "foto_digital",
+    iconKey: "UserCircleIcon",
+    label: "Fotografía (imágen)",
+    description: "Sube una fotografía digital tipo credencial en formato JPG o PNG (máx. 5MB). Esta imagen se usará en tu perfil.",
+    accept: "image/jpeg,image/png",
+    isAvatar: true,
+  },
+  {
     key: "identificacion_oficial",
     iconKey: "IdentificationIcon",
     label: "Identificación Oficial",
@@ -55,10 +69,11 @@ export const stepsExpediente = [
     description: "Adjunta cartas de recomendación o constancias laborales recientes.",
   },
   {
-    key: "fotografias",
-    iconKey: "UserPlusIcon",
-    label: "Fotografía Infantil",
-    description: "Adjunta una fotografía tamaño infantil, fondo blanco, reciente.",
+    key: "curriculum_vitae",
+    iconKey: "DocumentTextIcon",
+    label: "Currículum Vitae",
+    description: "Adjunta tu currículum vitae actualizado en PDF.",
+    accept: "application/pdf",
   },
   {
     key: "carta_no_penales",

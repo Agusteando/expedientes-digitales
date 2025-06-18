@@ -32,6 +32,9 @@ export default async function AdminInicioPage({ searchParams }) {
   const allPlantelStats = await fetchAllPlantelStats();
   const unassignedUsers = await fetchUnassignedUsers();
 
+  // LOG what is being sent to the assignment component (from server/server props)
+  console.log("[DEBUG] Prop to AssignEmployeesSectionClient (unassignedUsers):", unassignedUsers);
+
   // For admin
   const admins = await prisma.user.findMany({
     where: { role: { in: ["admin", "superadmin"] } },
@@ -68,7 +71,6 @@ export default async function AdminInicioPage({ searchParams }) {
     }
   }
   const adminMultiplePlanteles = assignablePlanteles.length > 1;
-  // The following prop is used to display approve actions for admin/superadmin
   const enableApproval = session.role === "admin" || session.role === "superadmin";
 
   return (

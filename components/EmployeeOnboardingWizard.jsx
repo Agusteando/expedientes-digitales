@@ -45,7 +45,9 @@ function formatDateDisplay(date) {
   }
 }
 
-export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) {
+export default function EmployeeOnboardingWizard({ user: userProp, mode = "expediente" }) {
+  // Local state for user to allow updating plantelId/picture instantly
+  const [user, setUser] = useState(userProp);
   const [currentStep, setCurrentStep] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -62,11 +64,32 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const [fetchError, setFetchError] = useState("");
   const [loadingData, setLoadingData] = useState(true);
 
+  // Planteles for plantel selection step
+  const [planteles, setPlanteles] = useState([]);
+  const [plantelLoading, setPlantelLoading] = useState(true);
+  const [plantelSuccess, setPlantelSuccess] = useState("");
+  const [plantelError, setPlantelError] = useState("");
+
   // Track if we should run animation on "Siguiente" enable
   const [animateNext, setAnimateNext] = useState(false);
 
   // Helper text visibility/hints for novice users
   const [showHelperToast, setShowHelperToast] = useState(true);
+
+  // Fetch planteles on mount (PUBLIC API)
+  useEffect(() => {
+    async function fetchPlanteles() {
+      try {
+        setPlantelLoading(true);
+        const res = await fetch("/api/planteles/list");
+        const p = res.ok ? await res.json() : [];
+        setPlanteles(Array.isArray(p) ? p : []);
+      } finally {
+        setPlantelLoading(false);
+      }
+    }
+    fetchPlanteles();
+  }, []);
 
   // Fetch steps and status from backend
   async function fetchExpedienteSteps() {
@@ -87,36 +110,92 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
 
   useEffect(() => {
     fetchExpedienteSteps();
-    // eslint-disable-next-line
   }, [user.id]);
 
   const steps = stepsExpediente;
   const totalSteps = steps.length;
   const requiredUploadSteps = useMemo(
-    () => steps.filter(s => !s.signable).map(s => s.key),
+    () => steps.filter(s => !s.signable && !s.isPlantelSelection && !s.isAvatar).map(s => s.key),
     [steps]
   );
+
   let numUploadedDocs = 0;
   for (const key of requiredUploadSteps) {
     const status = stepStatus[key];
     if (status && status.checklist && status.checklist.fulfilled) numUploadedDocs++;
   }
-  const uploadsComplete = numUploadedDocs === requiredUploadSteps.length;
 
-  useEffect(() => {
-    if (!uploadsComplete && steps[currentStep]?.signable) {
-      const idx = steps.findIndex(s => !s.signable && (!stepStatus[s.key]?.checklist?.fulfilled));
-      if (idx !== -1) setCurrentStep(idx);
+  // For digital photo, it's considered done if doc/checklist set
+  const digitalPhotoDone =
+    stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled;
+
+  // Plantel: fulfilled if user.plantelId set
+  const plantelFulfilled = !!user.plantelId;
+
+  // When plantel changed, update user.plantelId (update local state)
+  async function handleSelectPlantel(pid) {
+    if (!pid) return;
+    setPlantelLoading(true); setPlantelError(""); setPlantelSuccess("");
+    try {
+      const res = await fetch("/api/me/plantel", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plantelId: pid })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPlantelError(data?.error || "No se pudo seleccionar plantel.");
+        setPlantelLoading(false);
+        return;
+      }
+      setPlantelSuccess("Plantel guardado.");
+      setUser(u => ({ ...u, plantelId: parseInt(pid, 10) }));
+      setTimeout(() => setPlantelSuccess(""), 1200);
+    } catch {
+      setPlantelError("No se pudo seleccionar plantel.");
     }
-    // eslint-disable-next-line
-  }, [uploadsComplete, currentStep, stepStatus]);
+    setPlantelLoading(false);
+  }
 
+  // File upload logic ("foto_digital" now image, update avatar instantly)
   async function handleFileUpload(file) {
     setUploading(true);
     setUploadError("");
     setUploadSuccess("");
     setUploadProgress(0);
     const key = steps[currentStep].key;
+
+    if (key === "foto_digital") {
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const res = await fetch(`/api/documents/${user.id}/foto_digital/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setUploadError(data?.error || "Error al subir imagen.");
+          setUploading(false); setUploadProgress(null);
+          return;
+        }
+        setUploadSuccess("¡Fotografía cargada! Ya puedes avanzar.");
+        setAnimateNext(true);
+        if (data.avatarUrl) {
+          setUser(u => ({ ...u, picture: data.avatarUrl }));
+        }
+        clearTimeout(successTimeout.current);
+        successTimeout.current = setTimeout(() => setUploadSuccess(""), 4000);
+        fetchExpedienteSteps();
+      } catch (err) {
+        setUploadError("No se pudo subir la imagen.");
+      }
+      setUploading(false);
+      setUploadProgress(null);
+      return;
+    }
+
+    // All other uploads
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `/api/documents/${user.id}/${key}/upload`, true);
     xhr.onload = function () {
@@ -184,7 +263,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     ) {
       setFreshWidgetId(stepStatus[step.key].signature.mifielMetadata.signers[0].widget_id);
     }
-    // eslint-disable-next-line
   }, [currentStep, steps, stepStatus]);
 
   function handleWidgetSuccess() {
@@ -192,7 +270,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
     setSignatureStatus("¡Documento firmado!");
   }
 
-  // Show helper toast for onboarding
   useEffect(() => {
     setShowHelperToast(true);
     const timeout = setTimeout(() => setShowHelperToast(false), 10000);
@@ -202,7 +279,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   function getDisplayStatus(item, isSignable) {
     if (!item) return getStatusMeta("pending");
     if (isSignable) return getStatusMeta(item.status);
-    // Checklist
     if (item.fulfilled) return getStatusMeta("fulfilled");
     return getStatusMeta(item.status || (item.fulfilled ? "fulfilled" : "pending"));
   }
@@ -219,33 +295,32 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
   const step = steps[currentStep];
   const status = stepStatus[step.key] || {};
   const { checklist, document, signature } = status;
-
   const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs[0] || null;
 
+  // Plantel select logic
+  const canGoNextPlantel = step.key !== "plantel" || (!plantelLoading && !!user.plantelId && planteles.length > 0);
+  const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
   const isCurrentStepFulfilled = step.signable
     ? getDisplayStatus(signature, true).color === "emerald"
     : checklist && checklist.fulfilled;
 
-  const canGoNext = currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading;
+  const canGoNext = (
+    step.key === "plantel"
+      ? canGoNextPlantel
+      : step.key === "foto_digital"
+        ? canGoNextPhoto
+        : (currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading)
+  );
   const canGoPrev = currentStep > 0 && !uploading && !signatureLoading;
   const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
   const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
-
-  // Adjust this value to match your sticky app nav/header height (56px=top-14, 64px=top-16, adjust if needed)
   const stickyTop = "top-16";
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
-      {/* Sticky stepper: visible above the card, sticky in the viewport below any main sticky app header/nav */}
-      <div
-        className={`w-full z-30 sticky ${stickyTop} px-0 xs:px-1 sm:px-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100/70 dark:border-slate-900/70`}
-        style={{
-          // Backup for Safari that ignores sticky on non-block/relative z
-          left: 0, right: 0,
-        }}
-      >
+      <div className={`w-full z-30 sticky ${stickyTop} px-0 xs:px-1 sm:px-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100/70 dark:border-slate-900/70`}>
         <OnboardingStepper
           steps={steps}
           activeStep={currentStep}
@@ -255,14 +330,12 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
           className="py-1"
         />
       </div>
-      {/* Wizard card, scrolls under sticky stepper */}
       <section className={wizardCard + " relative mt-0"}>
         {showHelperToast && (
           <div className="w-full bg-cyan-100/60 dark:bg-cyan-900/70 flex flex-row items-center justify-center rounded-xl py-3 px-4 shadow text-cyan-900 dark:text-cyan-100 font-semibold text-sm xs:text-base mb-1 text-center select-none animate-fade-in">
-            <span className="inline">Para avanzar a cada paso, sube el archivo solicitado y espera la validación. Verás un mensaje de éxito cuando tu archivo haya sido recibido. Puedes navegar libremente en los pasos arriba si deseas consultar o regresar.</span>
+            <span className="inline">Para avanzar a cada paso, sube el archivo solicitado, fotografía y selecciona tu plantel asignado antes de continuar. Puedes navegar libremente arriba si deseas consultar o regresar.</span>
           </div>
         )}
-        {/* Card header: logo & title */}
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
           <div className="w-14 h-14 relative mb-2">
             <Image src="/IMAGOTIPO-IECS-IEDIS.png" alt="IECS-IEDIS" fill className="object-contain rounded-xl bg-white/70" />
@@ -280,10 +353,225 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
             </div>
           </div>
         </div>
-        {/* Status Badge and upload result display */}
-        <div className="w-full flex flex-row items-center justify-center py-1">
+        {step.key === "plantel" ? (
+          <div className="w-full flex flex-col items-center justify-center my-7">
+            {plantelLoading ? (
+              <span className="text-cyan-700 mt-1 text-base font-bold">Cargando planteles...</span>
+            ) : (
+              <>
+                <label className="mb-3 font-semibold text-cyan-900 text-base">Selecciona tu plantel:</label>
+                <select
+                  className="w-full max-w-xs rounded border border-cyan-300 p-3 text-base bg-white"
+                  value={user.plantelId || ""}
+                  onChange={e => handleSelectPlantel(e.target.value)}
+                  disabled={plantelLoading}
+                >
+                  <option value="">Elegir plantel...</option>
+                  {planteles.map(p =>
+                    <option value={p.id} key={p.id}>{p.name}</option>
+                  )}
+                </select>
+                {plantelLoading && <span className="text-cyan-700 mt-2 text-sm font-bold">Guardando...</span>}
+                {plantelSuccess && <span className="text-emerald-700 mt-2 text-sm font-bold">{plantelSuccess}</span>}
+                {plantelError && <span className="text-red-700 mt-2 text-sm font-bold">{plantelError}</span>}
+              </>
+            )}
+          </div>
+        ) : step.key === "foto_digital" ? (
+          <div className="w-full flex flex-col items-center justify-center gap-2 my-4">
+            {user.picture &&
+              <div className="flex flex-col items-center gap-1 mb-1">
+                <Image src={user.picture} alt="Foto" width={140} height={140} className="rounded-full object-cover border-4 border-cyan-200 bg-white shadow w-[88px] h-[88px] xs:w-[120px] xs:h-[120px] md:w-[140px] md:h-[140px]" />
+                <span className="text-sm text-slate-600 mt-1">Vista previa de tu fotografía</span>
+              </div>
+            }
+            <DocumentDropzone
+              loading={uploading}
+              error={uploadError}
+              onFile={handleFileUpload}
+              accept="image/jpeg,image/png"
+              labelText="Sube tu imagen JPG o PNG aquí"
+            />
+            {uploadSuccess && (
+              <div className="flex items-center justify-center gap-2 px-5 py-2 mt-1 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
+                <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
+                  <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
+                </svg>
+                <span>{uploadSuccess}</span>
+              </div>
+            )}
+          </div>
+        ) : !step.signable ? (
+          latestDoc ? (
+            <div className="flex flex-col gap-2 items-center w-full">
+              <PdfViewer url={latestDoc.filePath} height={380} className="mb-2"/>
+              <div className="flex flex-row gap-3 w-full mb-1 items-center justify-center">
+                <a href={latestDoc.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
+                  <CloudArrowUpIcon className="w-5 h-5" />
+                  Descargar PDF
+                </a>
+                <span className="inline-flex items-center px-2 py-1 rounded bg-cyan-50 text-xs text-slate-400 font-mono">
+                  {latestDoc.uploadedAt ? `Subido ${formatDateDisplay(latestDoc.uploadedAt)}` : null}
+                  {latestDoc.version ? <> &nbsp;| v{latestDoc.version}</> : null}
+                </span>
+              </div>
+              {uploadSuccess && (
+                <div className="flex items-center justify-center gap-2 px-5 py-2 mt-1 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
+                  <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
+                    <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
+                  </svg>
+                  <span>{uploadSuccess}</span>
+                </div>
+              )}
+              {latestDoc.reviewComment && (
+                <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-xs text-fuchsia-900 mt-1 mb-1 shadow-sm max-w-xl w-full">
+                  <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
+                  <span className="break-words">{latestDoc.reviewComment}</span>
+                </div>
+              )}
+              {historyDocs.length > 1 && (
+                <div className="w-full mt-3 px-1">
+                  <div className="font-bold text-cyan-900 dark:text-cyan-100 mb-1 text-xs flex items-center gap-2">
+                    <DocumentDuplicateIcon className="w-5 h-5 text-cyan-400" />
+                    Versiones anteriores
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-40 overflow-auto">
+                    {historyDocs.slice(1).map((doc, idx) => {
+                      const stat = getStatusMeta(doc.status);
+                      const Icon = stat.icon;
+                      return (
+                        <div key={doc.id} className="flex flex-col gap-0.5 border border-cyan-50 dark:border-slate-800 py-1 px-2 rounded bg-cyan-50/50 dark:bg-slate-800/30 text-[12px]">
+                          <div className="flex flex-row gap-2 items-center">
+                            <a href={doc.filePath} target="_blank" className="underline text-cyan-800 dark:text-cyan-200 font-bold break-all">{`Versión v${doc.version}`}</a>
+                            <span className="ml-2 text-slate-500">{formatDateDisplay(doc.uploadedAt)}</span>
+                            <span className={`inline-flex items-center gap-1 ml-2 font-bold text-xs ${stat.color === "emerald" ? "text-emerald-700" : stat.color === "red" ? "text-red-700" : "text-slate-400"}`}>
+                              {Icon && <Icon className="w-4 h-4" />}
+                              {stat.display}
+                            </span>
+                          </div>
+                          {doc.reviewComment && (
+                            <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
+                              <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
+                              <span className="break-words">{doc.reviewComment}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="w-full flex flex-col justify-center items-center mt-3">
+                <DocumentDropzone
+                  loading={uploading}
+                  error={uploadError}
+                  onFile={handleFileUpload}
+                  accept={step.accept || "application/pdf"}
+                />
+                {uploadProgress !== null &&
+                  <div className="w-full pt-2">
+                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
+                      <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                           style={{width: `${uploadProgress}%`}}></div>
+                    </div>
+                    <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                  </div>
+                }
+              </div>
+            </div>
+          ) : (
+            <div className="w-full mt-3">
+              <DocumentDropzone
+                loading={uploading}
+                error={uploadError}
+                onFile={handleFileUpload}
+                accept={step.accept || "application/pdf"}
+              />
+              {uploadProgress !== null &&
+                <div className="w-full pt-2">
+                  <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
+                    <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                         style={{width: `${uploadProgress}%`}}></div>
+                  </div>
+                  <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
+                </div>
+              }
+              {uploadSuccess && (
+                <div className="flex items-center justify-center gap-2 px-5 py-2 mt-2 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
+                  <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
+                    <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
+                  </svg>
+                  <span>{uploadSuccess}</span>
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <div className="flex flex-col gap-2 items-center w-full">
+            {step.key === "reglamento" && <StubReglamento />}
+            {step.key === "contrato" && <StubContrato />}
+            {numUploadedDocs === requiredUploadSteps.length && digitalPhotoDone && plantelFulfilled ? (
+              <>
+                {signature && signature.status !== "signed" && signature.status !== "completed" && (freshWidgetId || signature.mifielMetadata?.signers?.[0]?.widget_id) && (
+                  <div className="w-full mx-auto mb-2">
+                    <MifielWidgetClient
+                      widgetId={freshWidgetId || (signature?.mifielMetadata?.signers?.[0]?.widget_id)}
+                      env="production"
+                      onSuccess={handleWidgetSuccess}
+                      onError={(err) => setSignatureStatus("Error en la firma: " + (err?.message ?? err))}
+                    />
+                  </div>
+                )}
+                {signature && (signature.status === "signed" || signature.status === "completed") && (
+                  <div className="w-full flex flex-col items-center gap-2 mt-2">
+                    <div className="text-base xs:text-lg text-emerald-700 font-bold">¡Documento firmado digitalmente!</div>
+                    {signature?.mifielMetadata?.file_signed && (
+                      <a
+                        href={`https://app.mifiel.com${signature.mifielMetadata.file_signed}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-cyan-700 underline font-bold text-xs"
+                      >
+                        Descargar documento firmado
+                      </a>
+                    )}
+                  </div>
+                )}
+                {(signature?.status !== "signed" && signature?.status !== "completed") && !freshWidgetId && (
+                  <button
+                    onClick={handleSign}
+                    disabled={signatureLoading}
+                    className={mainButton + " mt-4 flex flex-row items-center justify-center gap-2"}
+                  >
+                    Firmar digitalmente ahora
+                  </button>
+                )}
+                {signatureStatus && (
+                  <div className="w-full text-center text-xs mt-2 text-purple-700 font-bold">{signatureStatus}</div>
+                )}
+                {!signature && !signatureLoading && (
+                  <div className="w-full text-center text-xs mt-2 text-purple-700 font-bold">Debes firmar digitalmente el documento mostrado arriba.</div>
+                )}
+              </>
+            ) : (
+              <div className="w-full text-center text-sm text-yellow-700 mt-2 font-semibold px-3">
+                Antes de firmar este documento, completa primero todos los archivos requeridos, selecciona plantel y sube fotografía.
+              </div>
+            )}
+          </div>
+        )}
+        <div className="w-full flex flex-row items-center justify-center py-1 pt-3">
           {(() => {
-            const stat = step.signable ? getDisplayStatus(signature, true) : getDisplayStatus(checklist, false);
+            const stat = step.signable
+              ? getDisplayStatus(signature, true)
+              : step.key === "plantel"
+                ? (plantelFulfilled ? getStatusMeta("fulfilled") : getStatusMeta("pending"))
+                : step.key === "foto_digital"
+                  ? (digitalPhotoDone ? getStatusMeta("fulfilled") : getStatusMeta("pending"))
+                  : getDisplayStatus(checklist, false);
             const Icon = stat.icon;
             return (
               <span className={`inline-flex items-center gap-2 font-bold text-xs md:text-sm px-3 py-1 rounded-full
@@ -301,169 +589,6 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
               </span>
             );
           })()}
-        </div>
-        <div className="flex-1 w-full px-0 flex flex-col gap-3 items-center mt-1 mb-1">
-          {!step.signable ? (
-            latestDoc ? (
-              <div className="flex flex-col gap-2 items-center w-full">
-                <PdfViewer url={latestDoc.filePath} height={380} className="mb-2"/>
-                <div className="flex flex-row gap-3 w-full mb-1 items-center justify-center">
-                  <a href={latestDoc.filePath} target="_blank" rel="noopener" className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1">
-                    <CloudArrowUpIcon className="w-5 h-5" />
-                    Descargar PDF
-                  </a>
-                  <span className="inline-flex items-center px-2 py-1 rounded bg-cyan-50 text-xs text-slate-400 font-mono">
-                    {latestDoc.uploadedAt ? `Subido ${formatDateDisplay(latestDoc.uploadedAt)}` : null}
-                    {latestDoc.version ? <> &nbsp;| v{latestDoc.version}</> : null}
-                  </span>
-                </div>
-                {uploadSuccess && (
-                  <div className="flex items-center justify-center gap-2 px-5 py-2 mt-1 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
-                    <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
-                      <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
-                    </svg>
-                    <span>{uploadSuccess}</span>
-                  </div>
-                )}
-                {latestDoc.reviewComment && (
-                  <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-xs text-fuchsia-900 mt-1 mb-1 shadow-sm max-w-xl w-full">
-                    <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
-                    <span className="break-words">{latestDoc.reviewComment}</span>
-                  </div>
-                )}
-                {historyDocs.length > 1 && (
-                  <div className="w-full mt-3 px-1">
-                    <div className="font-bold text-cyan-900 dark:text-cyan-100 mb-1 text-xs flex items-center gap-2">
-                      <DocumentDuplicateIcon className="w-5 h-5 text-cyan-400" />
-                      Versiones anteriores
-                    </div>
-                    <div className="flex flex-col gap-1 max-h-40 overflow-auto">
-                      {historyDocs.slice(1).map((doc, idx) => {
-                        const stat = getStatusMeta(doc.status);
-                        const Icon = stat.icon;
-                        return (
-                          <div key={doc.id} className="flex flex-col gap-0.5 border border-cyan-50 dark:border-slate-800 py-1 px-2 rounded bg-cyan-50/50 dark:bg-slate-800/30 text-[12px]">
-                            <div className="flex flex-row gap-2 items-center">
-                              <a href={doc.filePath} target="_blank" className="underline text-cyan-800 dark:text-cyan-200 font-bold break-all">{`Versión v${doc.version}`}</a>
-                              <span className="ml-2 text-slate-500">{formatDateDisplay(doc.uploadedAt)}</span>
-                              <span className={`inline-flex items-center gap-1 ml-2 font-bold text-xs ${stat.color === "emerald" ? "text-emerald-700" : stat.color === "red" ? "text-red-700" : "text-slate-400"}`}>
-                                {Icon && <Icon className="w-4 h-4" />}
-                                {stat.display}
-                              </span>
-                            </div>
-                            {doc.reviewComment && (
-                              <div className="flex flex-row items-center gap-2 bg-fuchsia-50 border border-fuchsia-100 rounded px-2 py-1 text-xs text-fuchsia-900 mt-1 shadow-sm max-w-xl w-full">
-                                <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-fuchsia-400" />
-                                <span className="break-words">{doc.reviewComment}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                <div className="w-full flex flex-col justify-center items-center mt-3">
-                  <DocumentDropzone
-                    loading={uploading}
-                    error={uploadError}
-                    onFile={handleFileUpload}
-                    accept="application/pdf"
-                  />
-                  {uploadProgress !== null &&
-                    <div className="w-full pt-2">
-                      <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
-                        <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
-                             style={{width: `${uploadProgress}%`}}></div>
-                      </div>
-                      <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
-                    </div>
-                  }
-                </div>
-              </div>
-            ) : (
-              <div className="w-full mt-3">
-                <DocumentDropzone
-                  loading={uploading}
-                  error={uploadError}
-                  onFile={handleFileUpload}
-                  accept="application/pdf"
-                />
-                {uploadProgress !== null &&
-                  <div className="w-full pt-2">
-                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-slate-100">
-                      <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
-                           style={{width: `${uploadProgress}%`}}></div>
-                    </div>
-                    <div className="text-center text-sm mt-1 font-bold text-cyan-700">{uploadProgress}%</div>
-                  </div>
-                }
-                {uploadSuccess && (
-                  <div className="flex items-center justify-center gap-2 px-5 py-2 mt-2 rounded-xl text-emerald-800 font-bold shadow bg-emerald-50 border-emerald-200 border animate-pop w-fit min-w-[210px]">
-                    <svg className="w-7 h-7 text-emerald-400 animate-sparkle" fill="none" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="#34D399" strokeWidth="3" fill="#A7F3D0"/>
-                      <path d="M7 13l3 3 7-7" stroke="#059669" strokeWidth="2.3" fill="none" strokeLinecap="round"/>
-                    </svg>
-                    <span>{uploadSuccess}</span>
-                  </div>
-                )}
-              </div>
-            )
-          ) : (
-            <div className="flex flex-col gap-2 items-center w-full">
-              {step.key === "reglamento" && <StubReglamento />}
-              {step.key === "contrato" && <StubContrato />}
-              {uploadsComplete ? (
-                <>
-                  {signature && signature.status !== "signed" && signature.status !== "completed" && (freshWidgetId || signature.mifielMetadata?.signers?.[0]?.widget_id) && (
-                    <div className="w-full mx-auto mb-2">
-                      <MifielWidgetClient
-                        widgetId={freshWidgetId || (signature?.mifielMetadata?.signers?.[0]?.widget_id)}
-                        env="production"
-                        onSuccess={handleWidgetSuccess}
-                        onError={(err) => setSignatureStatus("Error en la firma: " + (err?.message ?? err))}
-                      />
-                    </div>
-                  )}
-                  {signature && (signature.status === "signed" || signature.status === "completed") && (
-                    <div className="w-full flex flex-col items-center gap-2 mt-2">
-                      <div className="text-base xs:text-lg text-emerald-700 font-bold">¡Documento firmado digitalmente!</div>
-                      {signature?.mifielMetadata?.file_signed && (
-                        <a
-                          href={`https://app.mifiel.com${signature.mifielMetadata.file_signed}`}
-                          target="_blank"
-                          rel="noopener"
-                          className="text-cyan-700 underline font-bold text-xs"
-                        >
-                          Descargar documento firmado
-                        </a>
-                      )}
-                    </div>
-                  )}
-                  {(signature?.status !== "signed" && signature?.status !== "completed") && !freshWidgetId && (
-                    <button
-                      onClick={handleSign}
-                      disabled={signatureLoading}
-                      className={mainButton + " mt-4 flex flex-row items-center justify-center gap-2"}
-                    >
-                      Firmar digitalmente ahora
-                    </button>
-                  )}
-                  {signatureStatus && (
-                    <div className="w-full text-center text-xs mt-2 text-purple-700 font-bold">{signatureStatus}</div>
-                  )}
-                  {!signature && !signatureLoading && (
-                    <div className="w-full text-center text-xs mt-2 text-purple-700 font-bold">Debes firmar digitalmente el documento mostrado arriba.</div>
-                  )}
-                </>
-              ) : (
-                <div className="w-full text-center text-sm text-yellow-700 mt-2 font-semibold px-3">
-                  Antes de firmar este documento, completa primero todos los archivos requeridos.
-                </div>
-              )}
-            </div>
-          )}
         </div>
         <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[68px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
           <button
@@ -518,7 +643,7 @@ export default function EmployeeOnboardingWizard({ user, mode = "expediente" }) 
       </section>
       {numUploadedDocs === requiredUploadSteps.length &&
         stepStatus.contrato?.signature?.status === "signed" &&
-        stepStatus.reglamento?.signature?.status === "signed" && (
+        stepStatus.reglamento?.signature?.status === "signed" && digitalPhotoDone && plantelFulfilled && (
         <div className="mt-7 text-base xs:text-lg font-extrabold text-emerald-700 bg-emerald-50 rounded-xl px-6 py-4 border border-emerald-200 text-center shadow w-full">
           ¡Has completado tu expediente! Muchas gracias y bienvenido(a) a IECS-IEDIS.
         </div>

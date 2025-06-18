@@ -1,5 +1,6 @@
+
 import { NextResponse } from "next/server";
-import { join } from "path";
+import { join, extname } from "path";
 import { stat, readFile } from "fs/promises";
 
 // Dynamic route: /storage/documents/[...file] serves files stored outside /public
@@ -31,17 +32,20 @@ export async function GET(req, context) {
     return NextResponse.json({ error: "No es un archivo válido." }, { status: 400 });
   }
 
-  // Only allow PDF files
-  if (!diskPath.endsWith(".pdf")) {
-    return NextResponse.json({ error: "Solo se permiten archivos PDF." }, { status: 403 });
-  }
+  // Allow PDF, jpg, png images only
+  const ext = extname(diskPath).toLowerCase();
+  let contentType;
+  if (ext === ".pdf") contentType = "application/pdf";
+  else if (ext === ".jpg" || ext === ".jpeg") contentType = "image/jpeg";
+  else if (ext === ".png") contentType = "image/png";
+  else return NextResponse.json({ error: "Tipo de archivo no permitido." }, { status: 403 });
 
   try {
     const fileData = await readFile(diskPath);
     return new NextResponse(fileData, {
       status: 200,
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type": contentType,
         "Content-Disposition": `inline; filename="${fileArr[fileArr.length-1]}"`,
         "Cache-Control": "public, max-age=86400",
       }

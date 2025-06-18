@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { UserPlusIcon, BuildingLibraryIcon, ArrowRightOnRectangleIcon, ChevronDoubleUpIcon, ChevronDoubleDownIcon, MagnifyingGlassIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 
 export default function AssignEmployeesSection({
@@ -19,6 +19,14 @@ export default function AssignEmployeesSection({
         u.name?.toLowerCase().includes(filter.trim().toLowerCase()) ||
         u.email?.toLowerCase().includes(filter.trim().toLowerCase())
       );
+
+  // Log both full input and the actually rendered users
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      console.log("[DEBUG-client] AssignEmployeesSection unassignedUsers (raw, first 10):", Array.isArray(unassignedUsers) ? unassignedUsers.slice(0,10) : unassignedUsers, "total:", Array.isArray(unassignedUsers) ? unassignedUsers.length : "no array");
+      console.log("[DEBUG-client] AssignEmployeesSection filtered (rendered) users (first 10):", filteredUsers.slice(0,10), "total:", filteredUsers.length);
+    }
+  }, [unassignedUsers, filter, filteredUsers.length]);
 
   const [selection, setSelection] = useState({});
   const selectedUserIds = filteredUsers.filter(u => selection[u.id]).map(u => u.id);
