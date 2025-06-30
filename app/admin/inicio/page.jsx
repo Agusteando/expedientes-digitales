@@ -65,6 +65,17 @@ export default async function AdminInicioPage({ searchParams }) {
   });
 
   const userIds = users.map(u => u.id);
+
+  // Defensive: Ensure correct model exists and error if not, with developer hint.
+  if (typeof prisma.checklistItem !== "object" || typeof prisma.checklistItem.findMany !== "function") {
+    console.error("[app/admin/inicio/page.jsx] FATAL: prisma.checklistItem is undefined or missing 'findMany'. This indicates your Prisma Client is out-of-date. Please run: npx prisma generate");
+    return (
+      <div className="p-10 text-center text-red-700 font-bold">
+        <div>Error: prisma.checklistItem is missing on your Prisma Client instance.<br />
+        <span className="text-black">Did you recently change your schema or add a model? <b>Run <span className="font-mono bg-slate-200 rounded px-2 py-0.5">npx prisma generate</span> and restart your server</b>.</span></div>
+      </div>
+    );
+  }
   const allChecklist = await prisma.checklistItem.findMany({
     where: { userId: { in: userIds }, required: true },
     select: { id: true, userId: true, fulfilled: true, type: true }

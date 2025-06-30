@@ -1,98 +1,77 @@
 
 "use client";
-import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
-import { getStatusMeta } from "@/lib/expedienteStatus";
-import { StubReglamento, StubContrato } from "../ReglamentoContratoStub";
-const MifielWidgetClient = dynamic(() => import("../MifielWidgetClient"), { ssr: false });
+import { BookOpenIcon, PencilSquareIcon, CheckCircleIcon, ArrowDownTrayIcon } from "@heroicons/react/24/solid";
+
+const TEXTS = {
+  contrato: {
+    Icon: PencilSquareIcon,
+    label: "¡Ya casi terminas! Para concluir tu proceso, acude con tu administradora de Plantel para la firma presencial y entrega de tus documentos. Después de este paso, tu expediente se marcará como finalizado en el sistema.",
+    visualHint: "Recuerda traer tu identificación y tu documentación requerida."
+  },
+  reglamento: {
+    Icon: BookOpenIcon,
+    label: "¡Bienvenido! El siguiente paso se realiza de manera presencial. Visita tu Plantel para la revisión y firma del reglamento institucional con tu administradora.",
+    visualHint: "Te apoyaremos personalmente en tu incorporación."
+  }
+};
 
 export default function StepSignableDocument({
-  type, // "contrato" or "reglamento"
-  status,
-  signature,
-  canSign,
-  handleSign,
-  signatureStatus,
-  signatureLoading,
-  onWidgetSuccess,
+  type,                // "contrato" or "reglamento"
+  status,              // {checklist, document, signature}
+  signature,           // unused, always null in this mode
+  canSign,             // ignored
+  handleSign,          // ignored
+  signatureStatus,     // unused
+  signatureLoading,    // unused
+  onWidgetSuccess,     // unused
   user,
 }) {
-  const [widgetId, setWidgetId] = useState("");
-  useEffect(() => {
-    setWidgetId(
-      signature?.mifielMetadata?.signers?.[0]?.widget_id || ""
-    );
-  }, [signature]);
-  const stat = getStatusMeta(signature?.status);
-
+  // Fulfilled if admin uploaded signed doc, status.checklist.fulfilled or status.document.status==="accepted/signed"
+  const fulfilled = !!(status?.checklist?.fulfilled || (status?.document && ["accepted", "fulfilled", "signed"].includes((status.document.status || "").toLowerCase())));
+  const hasDoc = !!status.document;
+  const DocIcon = TEXTS[type]?.Icon || CheckCircleIcon;
   return (
-    <div className="flex flex-col gap-3 items-center w-full">
-      {type === "reglamento" && <StubReglamento />}
-      {type === "contrato" && <StubContrato />}
-      {canSign ? (
-        <>
-          {signature &&
-            signature.status !== "signed" &&
-            signature.status !== "completed" &&
-            (widgetId) && (
-              <div className="w-full mx-auto mb-2">
-                <MifielWidgetClient
-                  widgetId={widgetId}
-                  env="production"
-                  onSuccess={onWidgetSuccess}
-                  onError={(err) => { /* Surface error if desired */ }}
-                />
-              </div>
-            )}
-          {signature &&
-            (signature.status === "signed" || signature.status === "completed") && (
-              <div className="w-full flex flex-col items-center gap-2 mt-2">
-                <div className="text-base xs:text-lg text-emerald-700 font-bold">
-                  ¡Documento firmado digitalmente!
-                </div>
-                {signature?.mifielMetadata?.file_signed && (
-                  <a
-                    href={`https://app.mifiel.com${signature.mifielMetadata.file_signed}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="text-cyan-700 underline font-bold text-xs"
-                  >
-                    Descargar documento firmado
-                  </a>
-                )}
-              </div>
-            )}
-          {(!signature || (signature?.status !== "signed" && signature?.status !== "completed")) && !widgetId && (
-            <button
-              onClick={handleSign}
-              disabled={signatureLoading}
-              className="mt-4 py-2 rounded-full w-full max-w-xs bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-bold shadow-lg text-base hover:from-teal-700 hover:to-cyan-800"
-            >
-              Firmar digitalmente ahora
-            </button>
-          )}
-          {signatureStatus && (
-            <div className="w-full text-center text-xs mt-2 text-purple-700 font-bold">
-              {signatureStatus}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="w-full text-center text-sm text-yellow-700 mt-2 font-semibold px-3">
-          Antes de firmar este documento, completa primero todos los archivos requeridos, selecciona plantel y sube fotografía.
+    <div className="flex flex-col gap-4 items-center justify-center w-full">
+      <div className="flex flex-col items-center text-center mt-2">
+        <DocIcon className="w-14 h-14 text-cyan-700 mb-2" />
+        <div className="text-base xs:text-lg md:text-xl font-extrabold text-cyan-900 mb-1">
+          {type === "contrato"
+            ? "Firma presencial de contrato"
+            : "Firma presencial del reglamento"}
+        </div>
+        <div className="text-slate-700 font-semibold mb-2 px-2">
+          {TEXTS[type]?.label}
+        </div>
+        <div className="text-xs text-slate-500 mb-1">{TEXTS[type]?.visualHint}</div>
+      </div>
+      {fulfilled && hasDoc && (
+        <div className="flex flex-col items-center gap-2 w-full">
+          <div className="flex flex-row gap-2 items-center text-emerald-700 font-bold">
+            <CheckCircleIcon className="w-5 h-5" />
+            Documento firmado y entregado presencialmente
+          </div>
+          <a
+            href={status.document.filePath}
+            target="_blank"
+            rel="noopener"
+            className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1"
+          >
+            <ArrowDownTrayIcon className="w-5 h-5" />Ver documento entregado
+          </a>
+        </div>
+      )}
+      {!fulfilled && (
+        <div className="w-full text-center mt-2 text-yellow-700 font-bold px-3 text-sm flex flex-col items-center">
+          <span>Este paso debe ser concluido presencialmente en tu Plantel.</span>
         </div>
       )}
       <div className={`inline-flex items-center gap-2 font-bold text-xs md:text-sm px-3 py-1 rounded-full ${
-        stat.color === "emerald"
+        fulfilled
           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-          : stat.color === "red"
-            ? "bg-red-50 text-red-600 border border-red-200"
-            : stat.color === "yellow"
-              ? "bg-yellow-50 text-yellow-800 border border-yellow-100"
-              : "bg-slate-100 text-slate-500 border border-slate-100"
+          : "bg-yellow-50 text-yellow-800 border border-yellow-100"
       }`}>
-        {stat.icon && <stat.icon className="w-5 h-5 mr-0.5" />}
-        {stat.display}
+        <CheckCircleIcon className="w-5 h-5 mr-0.5" />
+        {fulfilled ? "Completado por tu administradora" : "Pendiente de entrega en Plantel"}
       </div>
     </div>
   );

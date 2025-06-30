@@ -30,7 +30,6 @@ const iconMap = {
 };
 
 export default function EmployeeOnboardingWizard({ user: userProp, mode = "expediente" }) {
-  // Always reflect latest userProp.rfc, userProp.curp, userProp.email (read from server/session)
   const [user, setUser] = useState(userProp);
   const [currentStep, setCurrentStep] = useState(0);
   const [loadingData, setLoadingData] = useState(true);
@@ -41,11 +40,11 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const steps = stepsExpediente;
   const totalSteps = steps.length;
   const requiredUploadSteps = useMemo(
-    () => steps.filter(s => !s.signable && !s.isPlantelSelection && !s.isAvatar).map(s => s.key),
+    () => steps.filter(s => !s.adminUploadOnly && !s.signable && !s.isPlantelSelection && !s.isAvatar).map(s => s.key),
     [steps]
   );
+  const requiredAdminSteps = steps.filter(s => s.adminUploadOnly).map(s => s.key);
 
-  // Upload and signature states (step-local, lifted for prop passing)
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
@@ -55,7 +54,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const [savingPlantel, setSavingPlantel] = useState(false);
   const successTimeout = useRef();
 
-  // Fetch planteles on mount (PUBLIC API)
   useEffect(() => {
     async function fetchPlanteles() {
       try {
@@ -87,14 +85,12 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     fetchExpedienteSteps();
   }, [user.id]);
 
-  // PATCH handler for plantel, curp, rfc, email together
   async function savePlantelCurpRfcEmail({
     plantelId, curp, rfc, email, onSuccess, onError
   }) {
     setSavingPlantel(true);
     setFetchError("");
     try {
-      // PATCH /api/me/plantel
       const pRes = await fetch("/api/me/plantel", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -107,7 +103,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         onError && onError(pdata?.error);
         return;
       }
-      // PATCH /api/me/curp-rfc
       const cRes = await fetch("/api/me/curp-rfc", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -120,7 +115,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         onError && onError(data?.error);
         return;
       }
-      // PATCH /api/me/email
       const eRes = await fetch("/api/me/email", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -150,7 +144,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     }
   }
 
-  // Digital photo upload
   async function handlePhotoUpload(file) {
     setUploading(true); setUploadError(""); setUploadSuccess(""); setUploadProgress(0);
     const xhr = new XMLHttpRequest();
@@ -183,7 +176,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     xhr.send(formData);
   }
 
-  // General document upload
   async function handleFileUpload(file, key) {
     setUploading(true); setUploadError(""); setUploadSuccess(""); setUploadProgress(0);
     const xhr = new XMLHttpRequest();
@@ -215,7 +207,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     xhr.send(formData);
   }
 
-  // Sign MiFiel contract
   async function handleSign(key) {
     setSignatureLoading(true); setSignatureStatus("");
     try {
@@ -233,12 +224,14 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     setSignatureLoading(false);
   }
 
-  // For summary/completion display
   let numUploadedDocs = 0;
   for (const key of requiredUploadSteps) {
     const status = stepStatus[key];
     if (status && status.checklist && status.checklist.fulfilled) numUploadedDocs++;
   }
+  const adminDocsComplete = requiredAdminSteps.every(
+    key => !!(stepStatus[key]?.checklist?.fulfilled || stepStatus[key]?.document)
+  );
   const digitalPhotoDone = stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled;
   const plantelFulfilled = !!user.plantelId;
 
@@ -248,18 +241,21 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs[0] || null;
 
-  // Compute if allowed to skip to next based on fulfilled steps
   const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
   const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
-  const isCurrentStepFulfilled = step.signable
-    ? (signature && (signature.status === "signed" || signature.status === "completed"))
-    : (checklist && checklist.fulfilled);
+  const isCurrentStepFulfilled = step.adminUploadOnly
+    ? (status.checklist && status.checklist.fulfilled) || status.document
+    : step.signable
+      ? (signature && (signature.status === "signed" || signature.status === "completed"))
+      : (checklist && checklist.fulfilled);
+
   const canGoNext =
     step.key === "plantel"
       ? canGoNextPlantel
       : step.key === "foto_digital"
         ? canGoNextPhoto
         : (currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading);
+
   const canGoPrev = currentStep > 0 && !uploading && !signatureLoading;
 
   const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
@@ -267,16 +263,16 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const stickyTop = "top-16";
 
-  if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
-  if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
-
-  // Determine if wizard completed
   const wizardComplete =
     numUploadedDocs === requiredUploadSteps.length &&
-    stepStatus.contrato?.signature?.status === "signed" &&
-    stepStatus.reglamento?.signature?.status === "signed" &&
+    requiredAdminSteps.every(
+      key => !!(stepStatus[key]?.checklist?.fulfilled || stepStatus[key]?.document)
+    ) &&
     digitalPhotoDone &&
     plantelFulfilled;
+
+  if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
+  if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
@@ -333,6 +329,12 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
                 uploadError={uploadError}
                 uploadSuccess={uploadSuccess}
               />
+            ) : step.adminUploadOnly ? (
+              <StepSignableDocument
+                type={step.key}
+                status={status}
+                user={user}
+              />
             ) : !step.signable ? (
               <StepDocumentUpload
                 latestDoc={latestDoc}
@@ -349,10 +351,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
                 type={step.key}
                 status={status}
                 signature={signature}
-                canSign={
-                  numUploadedDocs === requiredUploadSteps.length &&
-                  digitalPhotoDone && plantelFulfilled
-                }
+                canSign={numUploadedDocs === requiredUploadSteps.length && digitalPhotoDone && plantelFulfilled}
                 handleSign={() => handleSign(step.key)}
                 signatureStatus={signatureStatus}
                 signatureLoading={signatureLoading}

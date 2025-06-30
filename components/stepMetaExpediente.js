@@ -84,17 +84,15 @@ export const stepsExpediente = [
   {
     key: "reglamento",
     iconKey: "BookOpenIcon",
-    label: "Reglamento Interno",
-    description: "Lee nuestro reglamento institucional y firma digitalmente para continuar.",
-    signable: true,
-    requiresUploads: true,
+    label: "Firma de Reglamento",
+    description: "Una vez revisado el reglamento institucional, concluye tu proceso firmado de manera presencial.",
+    adminUploadOnly: true
   },
   {
     key: "contrato",
     iconKey: "PencilSquareIcon",
-    label: "Contrato Laboral",
-    description: "Lee detenidamente tu contrato laboral y firma digitalmente con tu FIEL.",
-    signable: true,
-    requiresUploads: true,
+    label: "Firma de Contrato Laboral",
+    description: "Tu contrato laboral se firma presencialmente en tu Plantel.",
+    adminUploadOnly: true
   },
 ];

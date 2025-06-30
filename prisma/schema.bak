@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model checklistitem {
+  id         String    @id
+  userId     Int
+  documentId String?
+  type       String
+  required   Boolean   @default(true)
+  fulfilled  Boolean   @default(false)
+  document   document? @relation(fields: [documentId], references: [id], map: "ChecklistItem_documentId_fkey")
+  user       user      @relation(fields: [userId], references: [id], map: "ChecklistItem_userId_fkey")
+
+  @@index([documentId], map: "ChecklistItem_documentId_fkey")
+  @@index([userId], map: "ChecklistItem_userId_fkey")
+}
+
+model document {
+  id            String          @id
+  userId        Int
+  type          String
+  status        String          @default("PENDING")
+  filePath      String
+  uploadedAt    DateTime        @default(now())
+  version       Int
+  reviewComment String?
+  checklistitem checklistitem[]
+  user          user            @relation(fields: [userId], references: [id], map: "Document_userId_fkey")
+
+  @@index([userId], map: "Document_userId_fkey")
+}
+
+model plantel {
+  id                           Int    @id @default(autoincrement())
+  name                         String @unique(map: "Plantel_name_key")
+  user_user_plantelIdToplantel user[] @relation("user_plantelIdToplantel")
+  user_planteladmins           user[] @relation("planteladmins")
+}
+
+model signature {
+  id         String    @id
+  userId     Int
+  type       String
+  status     String
+  signedAt   DateTime?
+  mifielData Json?
+  createdAt  DateTime  @default(now())
+  user       user      @relation(fields: [userId], references: [id], map: "Signature_userId_fkey")
+
+  @@index([userId], map: "Signature_userId_fkey")
+}
+
+model user {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  picture         String?
+  passwordHash    String?
+  rfc             String?
+  curp            String?
+  // Ficha técnica fields:
+  domicilioFiscal String?
+  fechaIngreso    DateTime?
+  puesto          String?
+  sueldo          Decimal?
+  horarioLaboral  String?
+  
+  // External system IDs
+  pathId          String?
+  evaId           String?
+  ingressioId     String?
+  noiId           String?
+
+  // End ficha
+
+  role           Role            @default(candidate)
+  isActive       Boolean         @default(true)
+  plantelId      Int?
+  plantel        Plantel?        @relation("Employees", fields: [plantelId], references: [id])
+  canSign        Boolean         @default(false)
+  isApproved     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  documents      Document[]
+  checklistItems ChecklistItem[]
+  signatures     Signature[]
+  plantelesAdmin Plantel[]       @relation("PlantelAdmins")
+}
+
+enum user_role {
+  superadmin
+  admin
+  employee
+  candidate
+}
