@@ -16,7 +16,9 @@ export default function UserManagementTable({
   onAssignPlantel,
   onApproveCandidate,
   onDocs,
-  onFichaTecnica
+  onFichaTecnica,
+  onSetActive,
+  onDelete,
 }) {
   return (
     <div className="overflow-x-auto mb-3">
@@ -34,6 +36,7 @@ export default function UserManagementTable({
             </th>
             <th className="px-2 py-2">Usuario</th>
             <th className="px-2 py-2">Plantel</th>
+            <th className="px-2 py-2">Estatus</th>
             <th className="px-2 py-2">Status</th>
             <th className="px-2 py-2">Documentos</th>
             <th className="px-2 py-2">Acción</th>
@@ -42,7 +45,7 @@ export default function UserManagementTable({
         <tbody>
           {users.length === 0 && (
             <tr>
-              <td colSpan={6} className="text-center text-slate-400 py-3">No se encontraron usuarios.</td>
+              <td colSpan={7} className="text-center text-slate-400 py-3">No se encontraron usuarios.</td>
             </tr>
           )}
           {users.map(u => (
@@ -59,6 +62,8 @@ export default function UserManagementTable({
               onApproveCandidate={onApproveCandidate}
               onDocs={onDocs}
               onFichaTecnica={onFichaTecnica}
+              onSetActive={onSetActive}
+              onDelete={onDelete}
             />
           ))}
         </tbody>

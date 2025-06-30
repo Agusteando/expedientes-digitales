@@ -1,11 +1,8 @@
 
 "use client";
 import { useState } from "react";
-import { BuildingLibraryIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, CheckCircleIcon, PowerIcon } from "@heroicons/react/24/outline";
 
-/**
- * BulkActionBar respects canAssignPlantel prop
- */
 export default function BulkActionBar({
   users,
   planteles,
@@ -14,12 +11,16 @@ export default function BulkActionBar({
   allSelected,
   canAssignPlantel,
   onBulkAssign,
-  onBulkApprove
+  onBulkApprove,
+  onBulkSetActive,
 }) {
   const [bulkPlantelId, setBulkPlantelId] = useState("");
   const canBulkAssign = selectedUserIds.length > 0;
   const usersSelected = users.filter(u => selectedUserIds.includes(u.id));
-  const readyToApprove = usersSelected.length > 0 && usersSelected.every(u => u.role === "candidate" && u.readyForApproval);
+  const readyToApprove = usersSelected.length > 0 && usersSelected.every(u => u.role === "candidate" && u.readyForApproval && u.isActive);
+
+  const canBulkInactivate = usersSelected.some(u => u.isActive);
+  const canBulkActivate = usersSelected.some(u => !u.isActive);
 
   return (
     <div className="sticky bottom-1 w-full py-3 bg-white border-t border-cyan-100 z-20 rounded-b-xl flex flex-wrap items-center gap-3 justify-between mt-2">
@@ -58,6 +59,22 @@ export default function BulkActionBar({
           onClick={onBulkApprove}
         >
           <CheckCircleIcon className="w-4 h-4" />Aprobar seleccionados
+        </button>
+        <button
+          type="button"
+          className="bg-gray-400 hover:bg-gray-600 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
+          disabled={!canBulkInactivate}
+          onClick={() => onBulkSetActive(false)}
+        >
+          <PowerIcon className="w-4 h-4" />Dar de baja
+        </button>
+        <button
+          type="button"
+          className="bg-emerald-600 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
+          disabled={!canBulkActivate}
+          onClick={() => onBulkSetActive(true)}
+        >
+          <PowerIcon className="w-4 h-4" />Activar
         </button>
       </div>
     </div>

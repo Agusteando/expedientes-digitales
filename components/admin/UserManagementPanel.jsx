@@ -18,6 +18,7 @@ export default function UserManagementPanel({
   const [plantelFilter, setPlantelFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState("todos"); // NEW: "todos", "activos", "bajas"
   const [selection, setSelection] = useState({});
   const [docsDrawer, setDocsDrawer] = useState({ open: false, user: null });
   const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
@@ -41,9 +42,10 @@ export default function UserManagementPanel({
         (statusFilter === "all" ||
          (statusFilter === "ready" && u.readyForApproval) ||
          (statusFilter === "employee" && u.role === "employee") ||
-         (statusFilter === "incomplete" && !u.readyForApproval && u.role === "candidate"))
+         (statusFilter === "incomplete" && !u.readyForApproval && u.role === "candidate")) &&
+        (activeFilter === "todos" || (activeFilter === "activos" ? u.isActive : !u.isActive))
       );
-  }, [users, filter, plantelFilter, roleFilter, statusFilter]);
+  }, [users, filter, plantelFilter, roleFilter, statusFilter, activeFilter]);
 
   const selectedUserIds = useMemo(
     () => Object.entries(selection).filter(([k,v]) => v).map(([k]) => Number(k)),
@@ -122,6 +124,52 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
+  // Activate/deactivate single
+  async function handleSetActive(userId, isActive) {
+    setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
+    try {
+      const res = await fetch(`/api/admin/user/${userId}/active`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error en el estatus");
+      setFeedback({ type: "success", message: isActive ? "Usuario activado" : "Usuario dado de baja" });
+      setTimeout(() => setFeedback({ type: null, message: "" }), 1100);
+      window.location.reload();
+    } catch (e) {
+      setFeedback({ type: "error", message: String(e.message || e) });
+    }
+  }
+  // Bulk activate/deactivate
+  async function handleBulkSetActive(isActive) {
+    setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
+    for (let userId of selectedUserIds) {
+      await handleSetActive(userId, isActive);
+    }
+    setFeedback({ type: "success", message: isActive ? "Usuarios activados" : "Usuarios dados de baja" });
+    setTimeout(() => setFeedback({ type: null, message: "" }), 1100);
+    window.location.reload();
+  }
+
+  // User delete
+  async function handleDelete(userId) {
+    setFeedback({ type: "info", message: "Eliminando usuario..." });
+    try {
+      const res = await fetch(`/api/admin/user/${userId}/delete`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al eliminar");
+      setFeedback({ type: "success", message: "Usuario eliminado" });
+      setTimeout(() => setFeedback({ type: null, message: "" }), 1200);
+      window.location.reload();
+    } catch (e) {
+      setFeedback({ type: "error", message: String(e.message || e) });
+    }
+  }
+
   function handleOpenDocs(user) { setDocsDrawer({ open: true, user }); }
   function closeDocsDrawer() { setDocsDrawer({ open: false, user: null }); }
   function handleOpenFichaTecnica(user) { setFichaDrawer({ open: true, user }); }
@@ -166,6 +214,15 @@ export default function UserManagementPanel({
             <option value="employee">Aprobados</option>
             <option value="incomplete">Incompletos</option>
           </select>
+          <select
+            className="border border-cyan-200 rounded px-2 py-1 text-sm"
+            value={activeFilter}
+            onChange={e => setActiveFilter(e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            <option value="activos">Sólo activos</option>
+            <option value="bajas">Sólo bajas</option>
+          </select>
         </div>
         {feedback.message && (
           <div className={`mt-2 px-3 py-1 rounded font-bold text-xs ${feedback.type === "success" ? "bg-emerald-50 text-emerald-700" : feedback.type === "error" ? "bg-red-50 text-red-700" : "bg-cyan-50 text-cyan-700"}`}>
@@ -190,6 +247,8 @@ export default function UserManagementPanel({
         onApproveCandidate={handleApproveCandidate}
         onDocs={handleOpenDocs}
         onFichaTecnica={handleOpenFichaTecnica}
+        onSetActive={handleSetActive}
+        onDelete={handleDelete}
       />
       <BulkActionBar
         users={usersFiltered}
@@ -200,6 +259,7 @@ export default function UserManagementPanel({
         canAssignPlantel={canAssignPlantel}
         onBulkAssign={handleBulkAssign}
         onBulkApprove={handleBulkApprove}
+        onBulkSetActive={handleBulkSetActive}
       />
       <UserDocsDrawer
         open={docsDrawer.open}
