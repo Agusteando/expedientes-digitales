@@ -26,8 +26,26 @@ export async function DELETE(req, context) {
     return NextResponse.json({ error: "No puedes eliminar tu propio usuario" }, { status: 403 });
   }
 
-  // Optionally: Clean up related data, but foreign key CASCADE would be best.
-  await prisma.user.delete({ where: { id: user.id } });
+  const uid = user.id;
 
-  return NextResponse.json({ ok: true, deleted: user.id });
+  // --- Manual cascade: delete all dependents before the user ---
+  // ChecklistItems
+  await prisma.checklistItem.deleteMany({ where: { userId: uid } });
+
+  // Documents
+  await prisma.document.deleteMany({ where: { userId: uid } });
+
+  // Signatures
+  await prisma.signature.deleteMany({ where: { userId: uid } });
+
+  // Remove admin relation if present (many-to-many)
+  await prisma.user.update({
+    where: { id: uid },
+    data: { plantelesAdmin: { set: [] } }
+  });
+
+  // Now delete the user
+  await prisma.user.delete({ where: { id: uid } });
+
+  return NextResponse.json({ ok: true, deleted: uid });
 }
