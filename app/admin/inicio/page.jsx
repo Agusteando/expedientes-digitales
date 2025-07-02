@@ -93,12 +93,31 @@ export default async function AdminInicioPage({ searchParams }) {
     (byUserSigs[s.userId] ||= []).push(s);
   }
 
+  // Helper to check if user is ready for approval (candidate, active, all docs, both firmas ok)
+  const stepsExpediente = require("@/components/stepMetaExpediente").stepsExpediente;
+  const checklistRequiredKeys = stepsExpediente.filter(
+    s => !s.signable && !s.isPlantelSelection
+  ).map(s => s.key);
+
+  function readyForApproval(u) {
+    if (u.role !== "candidate" || !u.isActive) return false;
+    const check = byUserChecklist[u.id] || [];
+    const allDocsOk = checklistRequiredKeys.every(
+      key => check.find(c => c.type === key && c.fulfilled)
+    );
+    const sigs = byUserSigs[u.id] || [];
+    const regSig = sigs.find(s => s.type === "reglamento" && ["signed", "completed"].includes(s.status));
+    const contSig = sigs.find(s => s.type === "contrato" && ["signed", "completed"].includes(s.status));
+    return allDocsOk && regSig && contSig;
+  }
+
   // *** KEY: force isActive to Boolean! ***
   const usersFull = users.map(u => ({
     ...u,
     isActive: !!u.isActive, // coerce to boolean!
     checklistItems: byUserChecklist[u.id] || [],
-    signatures: byUserSigs[u.id] || []
+    signatures: byUserSigs[u.id] || [],
+    readyForApproval: readyForApproval(u)
   }));
 
   const plantelData = planteles
@@ -109,7 +128,7 @@ export default async function AdminInicioPage({ searchParams }) {
       pUsers.forEach(u => {
         if (isUserExpedienteComplete(u)) completed++;
         const check = u.checklistItems || [];
-        const stepsReq = require("@/components/stepMetaExpediente").stepsExpediente.filter(s => !s.signable && !s.isPlantelSelection);
+        const stepsReq = stepsExpediente.filter(s => !s.signable && !s.isPlantelSelection);
         const checklistOk = stepsReq.every(st =>
           check.find(c => c.type === st.key && c.fulfilled));
         const regSig = u.signatures?.find(s => s.type === "reglamento");

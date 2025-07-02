@@ -15,12 +15,22 @@ export default function BulkActionBar({
   onBulkSetActive,
 }) {
   const [bulkPlantelId, setBulkPlantelId] = useState("");
-  const canBulkAssign = selectedUserIds.length > 0;
   const usersSelected = users.filter(u => selectedUserIds.includes(u.id));
-  const readyToApprove = usersSelected.length > 0 && usersSelected.every(u => u.role === "candidate" && u.readyForApproval && u.isActive);
+  // For bulk aprobar: only enable if 1+ selected eligible
+  const eligibleForApproval = usersSelected.filter(
+    u => u.role === "candidate" && u.readyForApproval && u.isActive
+  );
+  const canBulkApprove = eligibleForApproval.length > 0;
 
-  const canBulkInactivate = usersSelected.some(u => u.isActive);
-  const canBulkActivate = usersSelected.some(u => !u.isActive);
+  // For bulk activar: enable only if 1+ selected inactive (baja)
+  const eligibleForActivate = usersSelected.filter(u => !u.isActive);
+  const canBulkActivate = eligibleForActivate.length > 0;
+
+  // For bulk baja: enable only if 1+ selected active
+  const eligibleForBaja = usersSelected.filter(u => u.isActive);
+  const canBulkInactivate = eligibleForBaja.length > 0;
+
+  const canBulkAssign = selectedUserIds.length > 0;
 
   return (
     <div className="sticky bottom-1 w-full py-3 bg-white border-t border-cyan-100 z-20 rounded-b-xl flex flex-wrap items-center gap-3 justify-between mt-2">
@@ -54,15 +64,16 @@ export default function BulkActionBar({
         )}
         <button
           type="button"
-          className="bg-emerald-700 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
-          disabled={!readyToApprove}
-          onClick={onBulkApprove}
+          className={`bg-emerald-700 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center${!canBulkApprove ? " opacity-60 cursor-not-allowed" : ""}`}
+          disabled={!canBulkApprove}
+          onClick={() => onBulkApprove(eligibleForApproval.map(u => u.id))}
         >
-          <CheckCircleIcon className="w-4 h-4" />Aprobar seleccionados
+          <CheckCircleIcon className="w-4 h-4" />
+          Aprobar seleccionados
         </button>
         <button
           type="button"
-          className="bg-gray-400 hover:bg-gray-600 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
+          className={`bg-gray-400 hover:bg-gray-600 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center${!canBulkInactivate ? " opacity-60 cursor-not-allowed" : ""}`}
           disabled={!canBulkInactivate}
           onClick={() => onBulkSetActive(false)}
         >
@@ -70,7 +81,7 @@ export default function BulkActionBar({
         </button>
         <button
           type="button"
-          className="bg-emerald-600 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center"
+          className={`bg-emerald-600 hover:bg-emerald-900 text-white text-xs rounded-full px-4 py-1 font-bold shadow disabled:opacity-60 flex flex-row gap-2 items-center${!canBulkActivate ? " opacity-60 cursor-not-allowed" : ""}`}
           disabled={!canBulkActivate}
           onClick={() => onBulkSetActive(true)}
         >

@@ -12,6 +12,7 @@ import StepDigitalPhoto from "./StepDigitalPhoto";
 import StepDocumentUpload from "./StepDocumentUpload";
 import StepSignableDocument from "./StepSignableDocument";
 import StepSummary from "./StepSummary";
+import WelcomeApproved from "./WelcomeApproved";
 import { getStatusMeta } from "@/lib/expedienteStatus";
 
 const iconMap = {
@@ -270,6 +271,10 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     ) &&
     digitalPhotoDone &&
     plantelFulfilled;
+
+  if (user.isApproved) {
+    return <WelcomeApproved user={user} />;
+  }
 
   if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
   if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;

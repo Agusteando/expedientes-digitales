@@ -21,7 +21,7 @@ export default function UserRow({
 }) {
   const [confirmAction, setConfirmAction] = useState(null);
 
-  const isActive = !!user.isActive;  // always interpret as Boolean
+  const isActive = !!user.isActive;
   function canAdminAssignTo(pid) {
     return role === "superadmin" || adminsPlanteles.includes(pid);
   }
@@ -40,13 +40,13 @@ export default function UserRow({
   return (
     <tr className={`${selected ? "bg-cyan-50" : ""} ${!isActive ? "opacity-60 bg-gray-100" : ""}`}>
       <td className="text-center px-2 py-2">
+        {/* ALLOW SELECTION REGARDLESS OF STATUS */}
         <input
           type="checkbox"
           checked={selected}
           onChange={e => onSelect(e.target.checked)}
           className="accent-cyan-600 w-4 h-4"
           aria-label="Seleccionar usuario"
-          disabled={!isActive}
         />
       </td>
       <td className="px-2 py-2 flex flex-row gap-2 items-center">

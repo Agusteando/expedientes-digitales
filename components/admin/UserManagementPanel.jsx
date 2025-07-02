@@ -18,7 +18,7 @@ export default function UserManagementPanel({
   const [plantelFilter, setPlantelFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [activeFilter, setActiveFilter] = useState("todos"); // NEW: "todos", "activos", "bajas"
+  const [activeFilter, setActiveFilter] = useState("todos");
   const [selection, setSelection] = useState({});
   const [docsDrawer, setDocsDrawer] = useState({ open: false, user: null });
   const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
@@ -108,16 +108,22 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  async function handleBulkApprove() {
+  // Receive eligible IDs (from BulkActionBar)
+  async function handleBulkApprove(eligibleUserIds) {
+    if (!eligibleUserIds || !eligibleUserIds.length) {
+      setFeedback({ type: "error", message: "Ningún usuario seleccionado cumple requisitos." });
+      return;
+    }
     setFeedback({ type: "info", message: "Aprobando..." });
     try {
       const res = await fetch(`/api/admin/users/bulk-approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userIds: selectedUserIds })
+        body: JSON.stringify({ userIds: eligibleUserIds })
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Error de servidor");
-      setFeedback({ type: "success", message: "Usuarios aprobados" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error de servidor");
+      setFeedback({ type: "success", message: (data.approved?.length || 0) + " usuarios aprobados" });
       setTimeout(() => setFeedback({ type: null, message: "" }), 1100);
       window.location.reload();
     } catch (e) {
