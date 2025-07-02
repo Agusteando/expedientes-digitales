@@ -5,36 +5,25 @@ import { getSessionFromCookies } from "@/lib/auth";
 
 export async function POST(req, context) {
   const params = await context.params;
-  const userId = Number(params.userId);
-  if (!userId || Number.isNaN(userId)) {
-    return NextResponse.json({ error: "ID de usuario inválido." }, { status: 400 });
-  }
+  const { userId } = params;
   const session = await getSessionFromCookies(req.cookies);
   if (!session || !["admin", "superadmin"].includes(session.role)) {
-    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-  if (user.role !== "candidate") {
-    return NextResponse.json({ error: "Solo candidatos pueden ser aprobados." }, { status: 400 });
+  const u = await prisma.user.findUnique({ where: { id: Number(userId) } });
+  if (!u || u.role !== "candidate" || u.isApproved) {
+    return NextResponse.json({ error: "Usuario no es candidato aprobable." }, { status: 400 });
   }
-  if (user.isApproved) {
-    return NextResponse.json({ error: "El candidato ya ha sido aprobado." }, { status: 409 });
-  }
-
-  // Check contract signature
   const contratoSig = await prisma.signature.findFirst({
-    where: { userId, type: "contrato", status: { in: ["signed", "completed"] } }
+    where: { userId: Number(userId), type: "contrato", status: { in: ["signed", "completed"] } }
   });
   if (!contratoSig) {
-    return NextResponse.json({ error: "Candidato debe firmar el contrato antes de aprobar." }, { status: 400 });
+    return NextResponse.json({ error: "Falta firma de contrato." }, { status: 400 });
   }
-
-  const updated = await prisma.user.update({
-    where: { id: userId },
+  // Fix: when approved, also change to employee
+  await prisma.user.update({
+    where: { id: Number(userId) },
     data: { isApproved: true, role: "employee" }
   });
-
-  return NextResponse.json({ ok: true, user: { id: updated.id, role: updated.role, isApproved: updated.isApproved } });
+  return NextResponse.json({ ok: true, userId: Number(userId) });
 }

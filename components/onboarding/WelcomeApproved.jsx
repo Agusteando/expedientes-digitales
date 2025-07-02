@@ -4,7 +4,12 @@ import Image from "next/image";
 export default function WelcomeApproved({ user }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[430px] w-full animate-fade-in px-2 pb-6">
-      <div className="max-w-lg w-full bg-gradient-to-br from-white via-cyan-50 to-fuchsia-50 dark:from-slate-950 dark:via-cyan-900 dark:to-fuchsia-900 rounded-3xl shadow-2xl border border-cyan-100 dark:border-cyan-800 px-5 xs:px-9 md:px-16 pt-8 pb-10 flex flex-col items-center relative">
+      <div
+        className="max-w-lg w-full bg-gradient-to-br from-white via-cyan-50 to-fuchsia-50 dark:from-slate-950 dark:via-cyan-900 dark:to-fuchsia-900 rounded-3xl shadow-2xl border border-cyan-100 dark:border-cyan-800 px-5 xs:px-9 md:px-16 pt-8 pb-10 flex flex-col items-center relative"
+        style={{marginTop: "clamp(2.5rem, 7vw, 4.5rem)"}}
+      >
+        {/* Give more top margin (below topbar) for mascot overlap */}
+        <div className="w-full h-0" style={{marginTop: "min(2.6rem,6vw)"}} />
         <Image
           src="/Husky.png"
           alt="Bienvenida Husky"
@@ -12,6 +17,10 @@ export default function WelcomeApproved({ user }) {
           height={144}
           priority
           className="rounded-full w-28 h-28 xs:w-36 xs:h-36 object-contain shadow-lg border-4 border-fuchsia-200 absolute -top-16 left-1/2 -translate-x-1/2 bg-white"
+          style={{
+            // On larger screens (sm/md+), raise the Husky less so it's not hidden behind nav
+            top: "calc(-2.5rem - min(8vw, 2.25rem))"
+          }}
         />
         <div className="pt-16"></div>
         <div className="text-2xl xs:text-3xl font-black text-fuchsia-700 dark:text-fuchsia-200 text-center leading-snug mb-3 drop-shadow-md">

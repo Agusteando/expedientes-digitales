@@ -272,7 +272,8 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     digitalPhotoDone &&
     plantelFulfilled;
 
-  if (user.isApproved) {
+  // ---- UPDATED LOGIC: show welcome if role is "employee" (approved status) ----
+  if (user && user.role === "employee") {
     return <WelcomeApproved user={user} />;
   }
 
