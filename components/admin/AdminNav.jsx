@@ -116,8 +116,18 @@ export default function AdminNav({ session }) {
         </div>
       )}
       <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30" style={{marginTop: isImpersonated ? 48 : 0}}>
-        <a href="/admin/inicio" className="font-bold text-xl text-purple-800 tracking-tight select-none">
-          Expedientes Digitales
+        <a href="/admin/inicio" className="flex items-center gap-2">
+          {/* IECS-IEDIS Logo: signia.png replaces text */}
+          <span className="flex items-center">
+            <Image
+              src="/signia.png"
+              alt="IECS-IEDIS"
+              width={120}
+              height={40}
+              className="object-contain rounded bg-white shadow-sm"
+              priority
+            />
+          </span>
         </a>
         <div className="flex items-center gap-3">
           {isSuperadmin && (

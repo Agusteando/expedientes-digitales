@@ -47,13 +47,10 @@ export default async function AdminInicioPage({ searchParams }) {
     select: { id: true, name: true }
   });
 
-  // Only allow viewing planteles that are permitted!
   const scopedPlantelIds = session.role === "superadmin"
     ? planteles.map(p => p.id)
     : (session.plantelesAdminIds || []);
   const plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
-
-  const plantelesMap = Object.fromEntries(planteles.map(p => [p.id, p.name]));
 
   const users = await prisma.user.findMany({
     where: {
@@ -113,16 +110,15 @@ export default async function AdminInicioPage({ searchParams }) {
     return allDocsOk && regSig && contSig;
   }
 
-  // *** KEY: force isActive to Boolean! ***
   const usersFull = users.map(u => ({
     ...u,
-    isActive: !!u.isActive, // coerce to boolean!
+    isActive: !!u.isActive,
     checklistItems: byUserChecklist[u.id] || [],
     signatures: byUserSigs[u.id] || [],
     readyForApproval: readyForApproval(u)
   }));
 
-  // Filter planteles to only those allowed by session
+  // **THIS IS WHERE THE FILTER HAPPENS:**
   const plantelData = plantelesScoped
     .map(p => {
       const pUsers = usersFull.filter(u => u.plantelId === p.id);

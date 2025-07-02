@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionFromCookies, setSessionCookie, destroySessionCookie } from "@/lib/auth";
 
+// Save original superadmin session JWT as a backup httpOnly cookie on impersonate.
+// Restore that backup when stopping impersonation.
+
 export async function POST(req) {
   const session = await getSessionFromCookies(req.cookies);
   if (!session || session.role !== "superadmin") {
@@ -30,7 +33,7 @@ export async function POST(req) {
   });
   const plantelesAdminIds = plantelesAdmin.map(p => p.id);
 
-  // Compose new impersonated session, save original superadmin session data
+  // Compose new impersonated session
   const impersonatedSession = {
     id: admin.id,
     email: admin.email,
@@ -40,34 +43,46 @@ export async function POST(req) {
     plantelesAdminIds,
     picture: admin.picture || null,
     _impersonatedBy: session.email,
-    _impersonatorId: session.id,
-    _originalSuperadminSession: {
-      id: session.id,
-      email: session.email,
-      name: session.name,
-      role: "superadmin",
-      plantelId: session.plantelId,
-      plantelesAdminIds: session.plantelesAdminIds || [],
-      picture: session.picture || null,
-    }
+    _impersonatorId: session.id
   };
 
+  // Use session-token's value (JWT) as backup in a cookie
+  const origToken = req.cookies.get("session-token")?.value;
   const res = NextResponse.json({ ok: true, admin: { id: admin.id, email: admin.email, name: admin.name } });
   setSessionCookie(res, impersonatedSession);
+
+  if (origToken) {
+    res.cookies.set("impersonator-token", origToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 60 // 30 minutes for safety
+    });
+  }
   return res;
 }
 
 export async function DELETE(req) {
-  const session = await getSessionFromCookies(req.cookies);
-
-  if (session && session._originalSuperadminSession) {
-    // Restore original superadmin session
-    const superadminSession = session._originalSuperadminSession;
+  // Restore session-token from backup impersonator-token, if present
+  const impToken = req.cookies.get("impersonator-token")?.value;
+  if (impToken) {
     const res = NextResponse.json({ ok: true, stopped: true });
-    setSessionCookie(res, superadminSession);
+    // Restore session, delete backup
+    res.cookies.set("session-token", impToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60
+    });
+    res.cookies.set("impersonator-token", "", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: -1
+    });
     return res;
   }
-  // Otherwise log out entirely
+  // Fallback: log out
   const res = NextResponse.json({ ok: true, stopped: true });
   destroySessionCookie(res);
   return res;
