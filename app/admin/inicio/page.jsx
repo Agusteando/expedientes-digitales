@@ -47,10 +47,13 @@ export default async function AdminInicioPage({ searchParams }) {
     select: { id: true, name: true }
   });
 
-  const plantelesMap = Object.fromEntries(planteles.map(p => [p.id, p.name]));
+  // Only allow viewing planteles that are permitted!
   const scopedPlantelIds = session.role === "superadmin"
     ? planteles.map(p => p.id)
-    : session.plantelesAdminIds || [];
+    : (session.plantelesAdminIds || []);
+  const plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
+
+  const plantelesMap = Object.fromEntries(planteles.map(p => [p.id, p.name]));
 
   const users = await prisma.user.findMany({
     where: {
@@ -66,7 +69,6 @@ export default async function AdminInicioPage({ searchParams }) {
 
   const userIds = users.map(u => u.id);
 
-  // Defensive: Ensure correct model exists and error if not, with developer hint.
   if (typeof prisma.checklistItem !== "object" || typeof prisma.checklistItem.findMany !== "function") {
     console.error("[app/admin/inicio/page.jsx] FATAL: prisma.checklistItem is undefined or missing 'findMany'. This indicates your Prisma Client is out-of-date. Please run: npx prisma generate");
     return (
@@ -120,8 +122,8 @@ export default async function AdminInicioPage({ searchParams }) {
     readyForApproval: readyForApproval(u)
   }));
 
-  const plantelData = planteles
-    .filter(p => session.role === "superadmin" || scopedPlantelIds.includes(p.id))
+  // Filter planteles to only those allowed by session
+  const plantelData = plantelesScoped
     .map(p => {
       const pUsers = usersFull.filter(u => u.plantelId === p.id);
       let completed = 0, readyToApprove = 0;
@@ -180,7 +182,7 @@ export default async function AdminInicioPage({ searchParams }) {
 
         <UserManagementPanel
           users={usersFull}
-          planteles={planteles}
+          planteles={plantelesScoped}
           adminRole={adminRole}
           plantelesPermittedIds={adminPlantelesPermittedIds}
           canAssignPlantel={session.role === "superadmin"}

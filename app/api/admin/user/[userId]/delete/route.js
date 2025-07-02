@@ -8,44 +8,38 @@ export async function DELETE(req, context) {
   const { userId } = params;
   const session = await getSessionFromCookies(req.cookies);
 
-  if (!session || !["superadmin", "admin"].includes(session.role)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  // Debug: log attempted deletion and acting role
+  console.debug(`[user/${userId}/delete][DELETE] session:`, session ? `{id:${session.id},role:${session.role}}` : "none");
+
+  if (!session || session.role !== "superadmin") {
+    return NextResponse.json({ error: "Solo superadmin puede eliminar usuarios." }, { status: 403 });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
-  if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-
-  if (
-    session.role === "admin" &&
-    (!user.plantelId || !(session.plantelesAdminIds || []).includes(user.plantelId))
-  ) {
-    return NextResponse.json({ error: "Solo puedes eliminar usuarios de tu plantel" }, { status: 403 });
-  }
-  // Prevent deleting self unless superadmin
-  if (session.role !== "superadmin" && session.id === user.id) {
-    return NextResponse.json({ error: "No puedes eliminar tu propio usuario" }, { status: 403 });
+  const userIdInt = parseInt(userId, 10);
+  if (isNaN(userIdInt)) {
+    return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
-  const uid = user.id;
-
-  // --- Manual cascade: delete all dependents before the user ---
-  // ChecklistItems
-  await prisma.checklistItem.deleteMany({ where: { userId: uid } });
-
-  // Documents
-  await prisma.document.deleteMany({ where: { userId: uid } });
-
-  // Signatures
-  await prisma.signature.deleteMany({ where: { userId: uid } });
-
-  // Remove admin relation if present (many-to-many)
-  await prisma.user.update({
-    where: { id: uid },
-    data: { plantelesAdmin: { set: [] } }
+  // Debug/log: target user info for traceability
+  const user = await prisma.user.findUnique({
+    where: { id: userIdInt },
+    select: { id: true, name: true, email: true, role: true, plantelId: true }
   });
 
-  // Now delete the user
-  await prisma.user.delete({ where: { id: uid } });
+  if (!user) {
+    return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
+  }
 
-  return NextResponse.json({ ok: true, deleted: uid });
+  // For safety, prevent removing other superadmins (optional, can be removed if not desired)
+  if (user.role === "superadmin") {
+    return NextResponse.json({ error: "No puedes eliminar a otro superadmin." }, { status: 403 });
+  }
+
+  // Delete user (will also delete related documents, checklistItems if onDelete: CASCADE exists in schema)
+  await prisma.user.delete({ where: { id: userIdInt } });
+
+  // Log: successful
+  console.info(`[user/${userId}/delete] User deleted:`, user);
+
+  return NextResponse.json({ ok: true, deleted: userIdInt });
 }

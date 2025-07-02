@@ -16,10 +16,17 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Sin usuarios seleccionados." }, { status: 400 });
   }
   // Only approve candidates who have firmado contrato and not already employee
+  // ADMIN: filter out users not in own planteles
   let approved = [];
   for (let userId of userIds) {
     const u = await prisma.user.findUnique({ where: { id: Number(userId) } });
     if (!u || u.role !== "candidate" || u.isApproved) continue;
+    if (
+      session.role === "admin" &&
+      (!session.plantelesAdminIds || !session.plantelesAdminIds.includes(u.plantelId))
+    ) {
+      continue;
+    }
     const contratoSig = await prisma.signature.findFirst({
       where: { userId: Number(userId), type: "contrato", status: { in: ["signed", "completed"] } }
     });

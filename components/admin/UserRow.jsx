@@ -35,7 +35,8 @@ export default function UserRow({
   const canToggleActive = role === "superadmin" ||
     (role === "admin" && user.plantelId && adminsPlanteles.includes(user.plantelId) && user.id !== undefined);
 
-  const canDelete = (role === "superadmin" || (role === "admin" && user.plantelId && adminsPlanteles.includes(user.plantelId))) && user.id !== undefined;
+  // --- Restrict deletion to ONLY superadmin ---
+  const canDelete = role === "superadmin" && user.id !== undefined;
 
   return (
     <tr className={`${selected ? "bg-cyan-50" : ""} ${!isActive ? "opacity-60 bg-gray-100" : ""}`}>

@@ -20,10 +20,23 @@ export async function PATCH(req, context) {
   }
   const plantelIdInt = parseInt(plantelId, 10);
 
-  if (session.role === "admin" && !session.plantelesAdminIds?.includes(plantelIdInt)) {
-    return NextResponse.json({ error: "No admin rights for plantel" }, { status: 403 });
+  // For admin: prevent re-assigning users outside plantelesAdminIds, both for assigned plantel and for input users
+  if (session.role === "admin") {
+    if (!session.plantelesAdminIds?.includes(plantelIdInt)) {
+      return NextResponse.json({ error: "No admin rights for plantel" }, { status: 403 });
+    }
+    // Check all target users are in-scope
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, plantelId: true }
+    });
+    const outOfScope = users.filter(
+      u => !session.plantelesAdminIds.includes(u.plantelId)
+    );
+    if (outOfScope.length > 0) {
+      return NextResponse.json({ error: "No puedes asignar usuarios fuera de tus planteles.", outOfScope }, { status: 403 });
+    }
   }
-
   await prisma.user.updateMany({
     where: { id: { in: userIds } },
     data: { plantelId: plantelIdInt }
