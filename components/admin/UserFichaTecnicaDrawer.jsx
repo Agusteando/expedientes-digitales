@@ -1,16 +1,16 @@
 
 "use client";
 import { useState, useEffect } from "react";
-import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, BanknotesIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
+// Removed "sueldo" from FIELDS
 const FIELDS = [
   { key: "rfc", label: "RFC", icon: IdentificationIcon },
   { key: "curp", label: "CURP", icon: KeyIcon },
   { key: "domicilioFiscal", label: "Domicilio fiscal", icon: HomeIcon },
   { key: "fechaIngreso", label: "Fecha de ingreso", icon: CalendarDaysIcon },
   { key: "puesto", label: "Puesto", icon: Bars3BottomLeftIcon },
-  { key: "sueldo", label: "Sueldo mensual (MXN)", icon: BanknotesIcon },
   { key: "horarioLaboral", label: "Horario laboral", icon: ClockIcon },
   { key: "plantelId", label: "Plantel asignado", icon: BuildingLibraryIcon },
 ];
@@ -56,7 +56,6 @@ export default function UserFichaTecnicaDrawer({
             domicilioFiscal: f.domicilioFiscal ?? "",
             fechaIngreso: f.fechaIngreso ? String(f.fechaIngreso).substring(0, 10) : "",
             puesto: f.puesto ?? "",
-            sueldo: f.sueldo !== null && f.sueldo !== undefined ? String(f.sueldo) : "",
             horarioLaboral: f.horarioLaboral ?? "",
             plantelId: f.plantelId || "",
           });
@@ -77,12 +76,11 @@ export default function UserFichaTecnicaDrawer({
     setFicha(f => ({ ...f, plantelId: e.target.value }));
     setError(""); setSuccess("");
   }
+
   // Progress: count non-empty fields (plantelId counts if set and mapped)
   const filledCount = ficha
     ? FIELDS.filter(({ key }) =>
-        key === "sueldo"
-          ? (ficha.sueldo !== "" && ficha.sueldo !== null)
-          : (ficha[key] && String(ficha[key]).trim() !== "")
+        (ficha[key] && String(ficha[key]).trim() !== "")
       ).length
     : 0;
   const fichaPct = Math.round((filledCount / FIELDS.length) * 100);
@@ -93,10 +91,12 @@ export default function UserFichaTecnicaDrawer({
     setSuccess("");
     setError("");
     try {
+      // Remove sueldo from payload
+      const { sueldo, ...toSend } = ficha || {};
       const res = await fetch(`/api/admin/user/${user.id}/ficha-tecnica`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...ficha, sueldo: ficha.sueldo ? String(ficha.sueldo) : undefined })
+        body: JSON.stringify(toSend)
       });
       const data = await res.json();
       if (!res.ok) {
@@ -235,17 +235,6 @@ export default function UserFichaTecnicaDrawer({
                           <option key={p.id} value={p.id}>{p.name}</option>
                         )}
                       </select>
-                    ) : f.key === "sueldo" ? (
-                      <input
-                        className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                        name="sueldo"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={ficha.sueldo}
-                        onChange={handleChange}
-                        disabled={!canEdit || isSaving}
-                      />
                     ) : (
                       <input
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
