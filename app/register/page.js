@@ -19,22 +19,8 @@ function PrivacyStep({ onAccept }) {
       const isScrolled =
         el.scrollHeight - el.scrollTop <= el.clientHeight + 1;
       setIsBottom(isScrolled);
-      // If user has scrolled and box is checked, call onAccept
-      if (isScrolled && checked) {
-        onAccept(true);
-      }
     }
   };
-
-  // When checkbox or scroll changes, auto-emit accept only if both true
-  useEffect(() => {
-    if (isBottom && checked) {
-      onAccept(true);
-    } else {
-      onAccept(false);
-    }
-    // eslint-disable-next-line
-  }, [isBottom, checked]);
 
   useEffect(() => {
     const el = contentRef.current;
@@ -43,6 +29,12 @@ function PrivacyStep({ onAccept }) {
       return () => el.removeEventListener("scroll", handleScroll);
     }
   }, []);
+
+  // Callback to parent whenever acceptance state changes
+  useEffect(() => {
+    onAccept(isBottom && checked);
+    // eslint-disable-next-line
+  }, [isBottom, checked]);
 
   return (
     <div className="flex flex-col items-center w-full">
@@ -55,7 +47,7 @@ function PrivacyStep({ onAccept }) {
         </div>
         <div
           ref={contentRef}
-          className="overflow-y-auto max-h-[55vh] px-4 pr-6 py-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800 scroll-smooth text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+          className="overflow-y-auto max-h-[55vh] px-4 pr-6 py-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800 scroll-smooth text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify"
           tabIndex={0}
         >
           <h1 className="text-2xl sm:text-3xl font-bold text-center text-gray-800 dark:text-white mb-6">
@@ -193,7 +185,6 @@ function PrivacyStep({ onAccept }) {
             informativos, institucionales o de bienestar laboral.
           </p>
         </div>
-
         <form
           className="flex flex-col items-center gap-2 mt-4 px-2"
           onSubmit={e => {
@@ -214,14 +205,14 @@ function PrivacyStep({ onAccept }) {
           </label>
           <button
             type="submit"
-            className={`mt-3 px-6 py-3 rounded-lg font-bold bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed ${
+            className={`mt-5 w-full px-6 py-3 rounded-lg font-bold bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed ${
               isBottom && checked
                 ? "hover:from-cyan-700 hover:to-teal-600 focus:ring-4 focus:ring-cyan-200 dark:focus:ring-cyan-800"
                 : ""
             }`}
-            disabled={!isBottom || !checked}
+            disabled={!(isBottom && checked)}
           >
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1 justify-center">
               <CheckCircleIcon className="w-5 h-5" /> Acepto y continuar
             </span>
           </button>
@@ -463,13 +454,11 @@ function RegisterFormStep({ disabled }) {
 // Main Stepper Component
 export default function RegisterStepper() {
   const [step, setStep] = useState(0); // 0 = privacy, 1 = register
-  const [canContinue, setCanContinue] = useState(false);
 
   // Stepper Controls UI
   function StepHeader() {
     return (
       <div className="flex justify-center gap-6 items-center mb-8">
-        {/* Stepper bullets */}
         <div className="flex gap-6">
           <div
             className={`rounded-full w-8 h-8 flex items-center justify-center font-bold border-2 text-lg transition ${
@@ -490,7 +479,6 @@ export default function RegisterStepper() {
             2
           </div>
         </div>
-        {/* Step names mobile-hidden */}
         <div className="hidden sm:flex flex-col justify-center pl-10 leading-tight text-sm font-medium text-gray-500 dark:text-gray-400">
           <span>
             {step === 0 ? "Aviso de privacidad" : "Registro de cuenta"}
@@ -503,37 +491,16 @@ export default function RegisterStepper() {
   return (
     <div className="min-h-screen flex flex-col gap-0 justify-center items-center px-2 py-8 bg-gradient-to-tr from-[#fef6f0] via-[#d7f7fc] to-[#d9ffe5] dark:from-[#151a22] dark:via-[#203146] dark:to-[#23403c]">
       <StepHeader />
-      {/* Steps */}
       <div className="w-full flex flex-col lg:flex-row items-center gap-12 justify-center">
-        {/* Step 1 */}
         {step === 0 && (
-          <div className="w-full flex flex-col items-center">
-            <PrivacyStep
-              onAccept={ok => setCanContinue(!!ok)}
-            />
-            <button
-              className="mt-8 px-8 py-3 bg-gradient-to-r from-cyan-600 to-teal-500 text-white rounded-lg font-bold shadow-md text-base hover:from-cyan-700 hover:to-teal-600 focus:outline-none focus:ring-4 focus:ring-cyan-200 dark:focus:ring-cyan-800 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              onClick={() => setStep(1)}
-              disabled={!canContinue}
-            >
-              Continuar al registro
-            </button>
-          </div>
+          <PrivacyStep
+            onAccept={ok => {
+              if (ok) setStep(1);
+            }}
+          />
         )}
-        {/* Step 2 */}
-        {step === 1 && (
-          <RegisterFormStep disabled={false} />
-        )}
+        {step === 1 && <RegisterFormStep disabled={false} />}
       </div>
-      {step === 1 && (
-        <button
-          className="mt-8 px-8 py-3 bg-gradient-to-r from-gray-300 to-gray-500 dark:from-gray-800 dark:to-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-bold shadow-md text-base hover:bg-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-400 dark:focus:ring-gray-800 transition"
-          onClick={() => setStep(0)}
-          type="button"
-        >
-          Volver al aviso de privacidad
-        </button>
-      )}
     </div>
   );
 }
