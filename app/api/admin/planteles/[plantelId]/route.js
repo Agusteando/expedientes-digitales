@@ -15,15 +15,20 @@ export async function PATCH(req, context) {
 
   let data;
   try { data = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
-  if (!data.name || typeof data.name !== "string" || data.name.length < 2) {
-    return NextResponse.json({ error: "Nombre inválido" }, { status: 400 });
+  if ((!data.name || typeof data.name !== "string" || data.name.length < 2) &&
+      (!data.label || typeof data.label !== "string" || data.label.length < 2)) {
+    return NextResponse.json({ error: "Nombre o etiqueta inválida" }, { status: 400 });
   }
   const plantelIdInt = parseInt(plantelId, 10);
   if (isNaN(plantelIdInt)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
+  const updateData = {};
+  if (data.name && typeof data.name === "string") updateData.name = data.name.trim();
+  if (data.label && typeof data.label === "string") updateData.label = data.label.trim();
+
   const updated = await prisma.plantel.update({
     where: { id: plantelIdInt },
-    data: { name: data.name.trim() }
+    data: updateData
   });
 
   return NextResponse.json(updated);
@@ -41,7 +46,6 @@ export async function DELETE(req, context) {
   const plantelIdInt = parseInt(plantelId, 10);
   if (isNaN(plantelIdInt)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
-  // Enhanced debug: list assigned users/admins
   const usersAssigned = await prisma.user.findMany({
     where: { plantelId: plantelIdInt },
     select: { id: true, name: true, email: true }

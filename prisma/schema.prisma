@@ -17,6 +17,7 @@ enum Role {
 model Plantel {
   id   Int    @id @default(autoincrement())
   name String @unique
+  label String?
 
   // One-to-many: “employees” (User → Plantel)
   users User[] @relation("Employees")

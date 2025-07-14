@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 
 function validEmail(email) {
-  // Standard RFC 5322-like check (no spaces, single @, required domain)
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -19,7 +18,7 @@ export default function StepPlantelSelection({
   onStatus,
   saving,
 }) {
-  const [plantelId, setPlantelId] = useState(initialPlantelId || "");
+  const [plantelName, setPlantelName] = useState(""); // Now working with plantel.name as value
   const [rfc, setRfc] = useState(initialRfc || "");
   const [curp, setCurp] = useState(initialCurp || "");
   const [email, setEmail] = useState(initialEmail || "");
@@ -28,11 +27,16 @@ export default function StepPlantelSelection({
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
-    setPlantelId(initialPlantelId || "");
+    // Derive plantelName from initialPlantelId
+    if (initialPlantelId && planteles.length > 0) {
+      const found = planteles.find(p => String(p.id) === String(initialPlantelId));
+      if (found) setPlantelName(found.name);
+      else setPlantelName("");
+    }
     setRfc(initialRfc || "");
     setCurp(initialCurp || "");
     setEmail(initialEmail || "");
-  }, [initialPlantelId, initialRfc, initialCurp, initialEmail]);
+  }, [initialPlantelId, initialRfc, initialCurp, initialEmail, planteles]);
 
   function validCurp(c) {
     return /^[A-Z]{4}\d{6}[A-Z]{6}\d{2}$/.test((c ?? "").toUpperCase());
@@ -43,13 +47,13 @@ export default function StepPlantelSelection({
 
   function handleSave(e) {
     e.preventDefault();
-    if (!plantelId) return setLocalError("Selecciona plantel.");
+    if (!plantelName) return setLocalError("Selecciona plantel.");
     if (!validCurp(curp)) return setLocalError("CURP inválido.");
     if (!validRfc(rfc)) return setLocalError("RFC inválido.");
     if (!validEmail(email)) return setLocalError("Correo electrónico inválido.");
     setLocalError("");
     onSave?.({
-      plantelId,
+      plantelId: (planteles.find(p => p.name === plantelName)?.id) ?? "",
       curp: curp.trim().toUpperCase(),
       rfc: rfc.trim().toUpperCase(),
       email: email.trim(),
@@ -67,7 +71,7 @@ export default function StepPlantelSelection({
   useEffect(() => {
     if (onStatus)
       onStatus(
-        plantelId &&
+        plantelName &&
         validRfc(rfc) &&
         validCurp(curp) &&
         validEmail(email) &&
@@ -75,7 +79,7 @@ export default function StepPlantelSelection({
         !loading &&
         !localError
       );
-  }, [plantelId, rfc, curp, email, saving, loading, localError, onStatus]);
+  }, [plantelName, rfc, curp, email, saving, loading, localError, onStatus]);
 
   return (
     <form onSubmit={handleSave} className="w-full flex flex-col items-center gap-5">
@@ -85,13 +89,13 @@ export default function StepPlantelSelection({
         </label>
         <select
           className="w-full max-w-xs rounded border border-cyan-300 p-3 text-base bg-white"
-          value={plantelId || ""}
-          onChange={e => setPlantelId(e.target.value)}
+          value={plantelName || ""}
+          onChange={e => setPlantelName(e.target.value)}
           disabled={loading || saving}
         >
           <option value="">Elegir plantel...</option>
           {planteles.map(p => (
-            <option value={p.id} key={p.id}>{p.name}</option>
+            <option value={p.name} key={p.id}>{p.label || p.name}</option>
           ))}
         </select>
       </div>
@@ -156,11 +160,11 @@ export default function StepPlantelSelection({
       <button
         type="submit"
         className={`mt-2 py-2 rounded-full w-full max-w-xs bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-bold shadow-lg text-base hover:from-teal-700 hover:to-cyan-800 ${
-          !plantelId || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving
+          !plantelName || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving
             ? "opacity-40 grayscale pointer-events-none"
             : ""
         }`}
-        disabled={!plantelId || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving}
+        disabled={!plantelName || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving}
       >
         {saving ? "Guardando..." : "Guardar y continuar"}
       </button>
