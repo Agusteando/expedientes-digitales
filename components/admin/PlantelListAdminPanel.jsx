@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { PlusCircleIcon, PencilSquareIcon, TrashIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 
-export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh }) {
-  const [planteles, setPlanteles] = useState(initialPlanteles);
-  const [dataLoaded, setDataLoaded] = useState(!!initialPlanteles.length);
+export default function PlantelListAdminPanel() {
+  const [planteles, setPlanteles] = useState([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addLabel, setAddLabel] = useState("");
@@ -30,19 +30,13 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
       setMsg("");
     } catch (e) {
       setMsg("No se pudo actualizar.");
+      setDataLoaded(true);
     }
   }
 
   useEffect(() => {
-    if (!initialPlanteles.length) fetchPlanteles();
-    else setDataLoaded(true);
-    // eslint-disable-next-line
+    fetchPlanteles();
   }, []);
-
-  async function refetchPlanteles() {
-    if (onRefresh) return onRefresh();
-    await fetchPlanteles();
-  }
 
   async function handleAddPlantel(e) {
     e.preventDefault();
@@ -159,7 +153,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
             <PlusCircleIcon className="w-5 h-5 text-white" /> Nuevo Plantel
           </button>
         </div>
-        <button className="p-1" aria-label="Recargar" onClick={refetchPlanteles} title="Refrescar">
+        <button className="p-1" aria-label="Recargar" onClick={fetchPlanteles} title="Refrescar">
           <ArrowPathIcon className="w-5 h-5 text-cyan-400" />
         </button>
       </header>
