@@ -15,21 +15,32 @@ const TEXTS = {
   }
 };
 
+/**
+ * Hardened: always guards status/document against null/undefined
+ */
 export default function StepSignableDocument({
-  type,                // "contrato" or "reglamento"
-  status,              // {checklist, document, signature}
-  signature,           // unused, always null in this mode
-  canSign,             // ignored
-  handleSign,          // ignored
-  signatureStatus,     // unused
-  signatureLoading,    // unused
-  onWidgetSuccess,     // unused
+  type,
+  status,
+  signature,
+  canSign,
+  handleSign,
+  signatureStatus,
+  signatureLoading,
+  onWidgetSuccess,
   user,
 }) {
+  // Never crash if status or status props are missing
+  const safeStatus = status ?? {};
+  const checklist = safeStatus.checklist ?? null;
+  const document = safeStatus.document ?? null;
+
   // Fulfilled if admin uploaded signed doc, status.checklist.fulfilled or status.document.status==="accepted/signed"
-  const fulfilled = !!(status?.checklist?.fulfilled || (status?.document && ["accepted", "fulfilled", "signed"].includes((status.document.status || "").toLowerCase())));
-  const hasDoc = !!status.document;
+  const fulfilled = !!(checklist?.fulfilled || (
+    document && ["accepted", "fulfilled", "signed"].includes((document.status || "").toLowerCase())
+  ));
+  const hasDoc = !!document && !!document.filePath;
   const DocIcon = TEXTS[type]?.Icon || CheckCircleIcon;
+
   return (
     <div className="flex flex-col gap-4 items-center justify-center w-full">
       <div className="flex flex-col items-center text-center mt-2">
@@ -51,7 +62,7 @@ export default function StepSignableDocument({
             Documento firmado y entregado presencialmente
           </div>
           <a
-            href={status.document.filePath}
+            href={document.filePath}
             target="_blank"
             rel="noopener"
             className="flex items-center gap-2 border border-cyan-200 px-4 py-2 rounded-lg text-cyan-800 font-semibold bg-cyan-50 shadow-sm hover:bg-cyan-100 transition text-xs mt-1 mb-1"

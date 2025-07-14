@@ -73,10 +73,13 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
       const res = await fetch(`/api/expediente/steps/${user.id}`);
       if (!res.ok) throw new Error("No se pudo leer los datos del expediente.");
       const { stepHistory: history, stepStatus: status } = await res.json();
-      setStepHistory(history || {});
-      setStepStatus(status || {});
+      // Safeguard: always pass non-null objects
+      setStepHistory(history && typeof history === "object" ? history : {});
+      setStepStatus(status && typeof status === "object" ? status : {});
     } catch (err) {
       setFetchError(err.message || "Error de conexión.");
+      setStepHistory({});
+      setStepStatus({});
     } finally {
       setLoadingData(false);
     }
@@ -225,27 +228,33 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     setSignatureLoading(false);
   }
 
+  // Always safely access stepStatus/stepHistory, fallback if not present
   let numUploadedDocs = 0;
   for (const key of requiredUploadSteps) {
-    const status = stepStatus[key];
+    const status = (stepStatus && stepStatus[key]) ? stepStatus[key] : {};
     if (status && status.checklist && status.checklist.fulfilled) numUploadedDocs++;
   }
   const adminDocsComplete = requiredAdminSteps.every(
-    key => !!(stepStatus[key]?.checklist?.fulfilled || stepStatus[key]?.document)
+    key => {
+      const status = (stepStatus && stepStatus[key]) ? stepStatus[key] : {};
+      return !!(status.checklist?.fulfilled || status.document);
+    }
   );
-  const digitalPhotoDone = stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled;
+  const digitalPhotoDone = !!(stepStatus && stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled);
   const plantelFulfilled = !!user.plantelId;
 
+  // Guard current step lookup everywhere
   const step = steps[currentStep];
-  const status = stepStatus[step.key] || {};
+  const status = stepStatus && typeof stepStatus === "object" && stepStatus[step.key] ? stepStatus[step.key] : {};
+  const historyDocs = (stepHistory && typeof stepHistory === "object" && Array.isArray(stepHistory?.[step.key])) ? stepHistory[step.key] : [];
+  const latestDoc = historyDocs.length ? historyDocs[0] : null;
   const { checklist, document, signature } = status;
-  const historyDocs = Array.isArray(stepHistory?.[step.key]) ? stepHistory[step.key] : [];
-  const latestDoc = historyDocs[0] || null;
 
+  // Navigation and step guards
   const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
   const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
   const isCurrentStepFulfilled = step.adminUploadOnly
-    ? (status.checklist && status.checklist.fulfilled) || status.document
+    ? ((status && status.checklist && status.checklist.fulfilled) || (status && status.document))
     : step.signable
       ? (signature && (signature.status === "signed" || signature.status === "completed"))
       : (checklist && checklist.fulfilled);
@@ -267,7 +276,10 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const wizardComplete =
     numUploadedDocs === requiredUploadSteps.length &&
     requiredAdminSteps.every(
-      key => !!(stepStatus[key]?.checklist?.fulfilled || stepStatus[key]?.document)
+      key => {
+        const status = stepStatus && stepStatus[key] ? stepStatus[key] : {};
+        return !!(status.checklist?.fulfilled || status.document);
+      }
     ) &&
     digitalPhotoDone &&
     plantelFulfilled;
@@ -277,8 +289,19 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     return <WelcomeApproved user={user} />;
   }
 
-  if (loadingData) return <div className="w-full flex flex-col items-center justify-center py-12"><span className="text-slate-500 text-lg font-bold">Cargando expediente...</span></div>;
-  if (fetchError) return <div className="w-full flex flex-col items-center justify-center py-8"><span className="text-red-500 font-bold">{fetchError}</span></div>;
+  if (loadingData)
+    return (
+      <div className="w-full flex flex-col items-center justify-center py-12">
+        <span className="text-slate-500 text-lg font-bold">Cargando expediente...</span>
+      </div>
+    );
+
+  if (fetchError)
+    return (
+      <div className="w-full flex flex-col items-center justify-center py-8">
+        <span className="text-red-500 font-bold">{fetchError}</span>
+      </div>
+    );
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
@@ -287,7 +310,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
           steps={steps}
           activeStep={currentStep}
           onStepChange={(idx) => setCurrentStep(idx)}
-          stepStatus={stepStatus}
+          stepStatus={stepStatus || {}} // always non-null
           allowFreeJump={true}
           className="py-1"
         />
@@ -338,7 +361,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
             ) : step.adminUploadOnly ? (
               <StepSignableDocument
                 type={step.key}
-                status={status}
+                status={status || {}}
                 user={user}
               />
             ) : !step.signable ? (
@@ -355,7 +378,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
             ) : (
               <StepSignableDocument
                 type={step.key}
-                status={status}
+                status={status || {}}
                 signature={signature}
                 canSign={numUploadedDocs === requiredUploadSteps.length && digitalPhotoDone && plantelFulfilled}
                 handleSign={() => handleSign(step.key)}

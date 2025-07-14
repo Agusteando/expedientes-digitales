@@ -9,7 +9,7 @@ export const stepsExpediente = [
   {
     key: "foto_digital",
     iconKey: "UserCircleIcon",
-    label: "Fotografía (imágen)",
+    label: "Fotografía (imagen)",
     description: "Sube una fotografía digital tipo credencial en formato JPG o PNG (máx. 5MB). Esta imagen se usará en tu perfil.",
     accept: "image/jpeg,image/png",
     isAvatar: true,
