@@ -1,173 +1,132 @@
 
 "use client";
-import { useState, useEffect } from "react";
-
-function validEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
+import { useState } from "react";
+import { BuildingLibraryIcon } from "@heroicons/react/24/solid";
 
 export default function StepPlantelSelection({
-  plantelId: initialPlantelId,
-  rfc: initialRfc,
-  curp: initialCurp,
-  email: initialEmail,
-  planteles = [],
+  plantelId,
+  rfc,
+  curp,
+  email,
+  planteles,
   loading,
   error,
   onSave,
-  onStatus,
-  saving,
+  saving
 }) {
-  const [plantelName, setPlantelName] = useState(""); // Now working with plantel.name as value
-  const [rfc, setRfc] = useState(initialRfc || "");
-  const [curp, setCurp] = useState(initialCurp || "");
-  const [email, setEmail] = useState(initialEmail || "");
-  const [touched, setTouched] = useState({ rfc: false, curp: false, email: false });
-  const [localError, setLocalError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [localPlantelId, setLocalPlantelId] = useState(plantelId || "");
+  const [localRfc, setLocalRfc] = useState(rfc || "");
+  const [localCurp, setLocalCurp] = useState(curp || "");
+  const [localEmail, setLocalEmail] = useState(email || "");
+  const [msg, setMsg] = useState("");
 
-  useEffect(() => {
-    // Derive plantelName from initialPlantelId
-    if (initialPlantelId && planteles.length > 0) {
-      const found = planteles.find(p => String(p.id) === String(initialPlantelId));
-      if (found) setPlantelName(found.name);
-      else setPlantelName("");
-    }
-    setRfc(initialRfc || "");
-    setCurp(initialCurp || "");
-    setEmail(initialEmail || "");
-  }, [initialPlantelId, initialRfc, initialCurp, initialEmail, planteles]);
-
-  function validCurp(c) {
-    return /^[A-Z]{4}\d{6}[A-Z]{6}\d{2}$/.test((c ?? "").toUpperCase());
-  }
-  function validRfc(r) {
-    return /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test((r ?? "").toUpperCase());
-  }
-
-  function handleSave(e) {
+  function handleSubmit(e) {
     e.preventDefault();
-    if (!plantelName) return setLocalError("Selecciona plantel.");
-    if (!validCurp(curp)) return setLocalError("CURP inválido.");
-    if (!validRfc(rfc)) return setLocalError("RFC inválido.");
-    if (!validEmail(email)) return setLocalError("Correo electrónico inválido.");
-    setLocalError("");
-    onSave?.({
-      plantelId: (planteles.find(p => p.name === plantelName)?.id) ?? "",
-      curp: curp.trim().toUpperCase(),
-      rfc: rfc.trim().toUpperCase(),
-      email: email.trim(),
-      onSuccess: () => {
-        setSuccessMsg("¡Datos actualizados!");
-        setTimeout(() => setSuccessMsg(""), 1500);
-      },
-      onError: (msg) => {
-        setSuccessMsg("");
-        setLocalError(msg || "Error guardando campos.");
-      }
-    });
+    if (!localPlantelId) {
+      setMsg("Selecciona tu plantel.");
+      return;
+    }
+    if (!/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/i.test(localRfc.trim())) {
+      setMsg("RFC inválido.");
+      return;
+    }
+    if (!/^[A-Z]{4}[0-9]{6}[A-Z0-9]{8}$/i.test(localCurp.trim())) {
+      setMsg("CURP inválido.");
+      return;
+    }
+    if (!/^[^@]+@[^@]+\.[^@]+$/.test(localEmail.trim())) {
+      setMsg("Correo inválido.");
+      return;
+    }
+    setMsg("");
+    if (onSave) {
+      onSave({
+        plantelId: localPlantelId,
+        rfc: localRfc.trim().toUpperCase(),
+        curp: localCurp.trim().toUpperCase(),
+        email: localEmail.trim(),
+        onSuccess: () => setMsg("Datos guardados."),
+        onError: (err) => setMsg(err || "Error al guardar."),
+      });
+    }
   }
-
-  useEffect(() => {
-    if (onStatus)
-      onStatus(
-        plantelName &&
-        validRfc(rfc) &&
-        validCurp(curp) &&
-        validEmail(email) &&
-        !saving &&
-        !loading &&
-        !localError
-      );
-  }, [plantelName, rfc, curp, email, saving, loading, localError, onStatus]);
 
   return (
-    <form onSubmit={handleSave} className="w-full flex flex-col items-center gap-5">
-      <div className="flex flex-col items-center w-full gap-2">
-        <label className="mb-1 font-semibold text-cyan-900 text-base">
-          Selecciona tu plantel:
-        </label>
-        <select
-          className="w-full max-w-xs rounded border border-cyan-300 p-3 text-base bg-white"
-          value={plantelName || ""}
-          onChange={e => setPlantelName(e.target.value)}
-          disabled={loading || saving}
-        >
-          <option value="">Elegir plantel...</option>
-          {planteles.map(p => (
-            <option value={p.name} key={p.id}>{p.label || p.name}</option>
-          ))}
-        </select>
+    <form className="flex flex-col gap-4 items-stretch justify-center w-full max-w-md mx-auto pt-2" onSubmit={handleSubmit}>
+      <div className="flex flex-row items-center gap-3 mb-2">
+        <BuildingLibraryIcon className="w-7 h-7 text-cyan-400" />
+        <span className="font-extrabold text-cyan-800 text-lg">Selecciona tu plantel</span>
       </div>
-      <div className="my-2 w-full max-w-xs">
-        <label className="font-semibold text-xs text-cyan-900">Correo electrónico</label>
-        <input
-          className="w-full rounded border px-3 py-2 mt-1 mb-2 bg-white"
-          type="email"
-          name="email"
-          value={email}
-          onChange={e => { setEmail(e.target.value); setTouched(t => ({ ...t, email: true })); setLocalError(""); setSuccessMsg(""); }}
-          disabled={saving}
-          required
-          autoComplete="off"
-          placeholder="Ingresa tu correo"
-          onBlur={() => setTouched(t => ({ ...t, email: true }))}
-        />
-        {touched.email && email && !validEmail(email) && (
-          <span className="block text-xs text-red-600 font-bold">Correo electrónico inválido</span>
-        )}
-        <label className="font-semibold text-xs text-cyan-900">RFC</label>
-        <input
-          className="w-full rounded border px-3 py-2 mt-1 mb-2 uppercase"
-          type="text"
-          name="rfc"
-          value={rfc}
-          placeholder="Ej: GOMC960912QX2"
-          onChange={e => { setRfc(e.target.value.toUpperCase()); setTouched(t => ({ ...t, rfc: true })); setLocalError(""); setSuccessMsg(""); }}
-          maxLength={13}
-          disabled={saving}
-          required
-        />
-        {touched.rfc && rfc && !validRfc(rfc) && (
-          <span className="block text-xs text-red-600 font-bold">RFC inválido</span>
-        )}
-
-        <label className="font-semibold text-xs text-cyan-900">CURP</label>
-        <input
-          className="w-full rounded border px-3 py-2 mt-1 mb-2 uppercase"
-          type="text"
-          name="curp"
-          value={curp}
-          placeholder="Ej: GOMC960912HDFRRL04"
-          onChange={e => { setCurp(e.target.value.toUpperCase()); setTouched(t => ({ ...t, curp: true })); setLocalError(""); setSuccessMsg(""); }}
-          maxLength={18}
-          disabled={saving}
-          required
-        />
-        {touched.curp && curp && !validCurp(curp) && (
-          <span className="block text-xs text-red-600 font-bold">CURP inválido</span>
-        )}
-        {localError && (
-          <span className="block text-xs font-bold text-red-600">{localError}</span>
-        )}
-        {error && (
-          <span className="block text-xs font-bold text-red-600">{error}</span>
-        )}
-        {successMsg && (
-          <span className="block text-xs font-bold text-emerald-600">{successMsg}</span>
-        )}
-      </div>
-      <button
-        type="submit"
-        className={`mt-2 py-2 rounded-full w-full max-w-xs bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-bold shadow-lg text-base hover:from-teal-700 hover:to-cyan-800 ${
-          !plantelName || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving
-            ? "opacity-40 grayscale pointer-events-none"
-            : ""
-        }`}
-        disabled={!plantelName || !validRfc(rfc) || !validCurp(curp) || !validEmail(email) || saving}
+      {error && (
+        <div className="rounded-lg bg-red-100 border border-red-200 text-red-700 font-bold text-xs p-2 mb-2 text-center">{error}</div>
+      )}
+      <label className="font-semibold text-cyan-800 text-xs">Plantel de adscripción</label>
+      <select
+        className="rounded border border-cyan-300 text-base px-3 py-2 bg-white mb-2 font-semibold"
+        required
+        value={localPlantelId}
+        onChange={e => setLocalPlantelId(e.target.value)}
+        disabled={saving}
+        aria-label="Selecciona plantel"
       >
-        {saving ? "Guardando..." : "Guardar y continuar"}
-      </button>
+        <option value="">Selecciona…</option>
+        {(planteles || []).map(p =>
+          <option key={p.id} value={p.id}>
+            {p.label || p.name}
+          </option>
+        )}
+      </select>
+      <label className="font-semibold text-cyan-800 text-xs">RFC</label>
+      <input
+        type="text"
+        className="rounded border border-cyan-300 text-base px-3 py-2 mb-2 font-mono uppercase"
+        maxLength={13}
+        value={localRfc}
+        onChange={e => setLocalRfc(e.target.value)}
+        disabled={saving}
+        required
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        inputMode="text"
+        autoComplete="off"
+      />
+      <label className="font-semibold text-cyan-800 text-xs">CURP</label>
+      <input
+        type="text"
+        className="rounded border border-cyan-300 text-base px-3 py-2 mb-2 font-mono uppercase"
+        maxLength={18}
+        value={localCurp}
+        onChange={e => setLocalCurp(e.target.value)}
+        disabled={saving}
+        required
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        inputMode="text"
+        autoComplete="off"
+      />
+      <label className="font-semibold text-cyan-800 text-xs">Correo electrónico</label>
+      <input
+        type="email"
+        className="rounded border border-cyan-300 text-base px-3 py-2 mb-2"
+        value={localEmail}
+        onChange={e => setLocalEmail(e.target.value)}
+        disabled={saving}
+        required
+        autoComplete="email"
+        inputMode="email"
+      />
+      <div className="flex gap-2 justify-end items-center mt-2">
+        {msg && <span className="text-xs font-semibold text-cyan-700 px-1">{msg}</span>}
+        <button
+          type="submit"
+          className="bg-cyan-700 hover:bg-cyan-900 text-white text-xs font-bold rounded-full px-5 py-2 transition"
+          disabled={saving || !localPlantelId || !localRfc || !localCurp || !localEmail}
+        >
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
     </form>
   );
 }

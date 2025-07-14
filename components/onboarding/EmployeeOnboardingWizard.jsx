@@ -73,7 +73,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
       const res = await fetch(`/api/expediente/steps/${user.id}`);
       if (!res.ok) throw new Error("No se pudo leer los datos del expediente.");
       const { stepHistory: history, stepStatus: status } = await res.json();
-      // Safeguard: always pass non-null objects
       setStepHistory(history && typeof history === "object" ? history : {});
       setStepStatus(status && typeof status === "object" ? status : {});
     } catch (err) {
@@ -95,42 +94,57 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     setSavingPlantel(true);
     setFetchError("");
     try {
-      const pRes = await fetch("/api/me/plantel", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plantelId }),
-      });
-      if (!pRes.ok) {
-        const pdata = await pRes.json();
-        setFetchError(pdata?.error || "No se pudo seleccionar plantel.");
-        setSavingPlantel(false);
-        onError && onError(pdata?.error);
-        return;
+      // PATCH plantelId
+      let userPatchOk = true;
+      if (user.plantelId !== parseInt(plantelId)) {
+        const pRes = await fetch("/api/me/plantel", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plantelId }),
+        });
+        userPatchOk = pRes.ok;
+        if (!userPatchOk) {
+          const pdata = await pRes.json();
+          setFetchError(pdata?.error || "No se pudo seleccionar plantel.");
+          setSavingPlantel(false);
+          if (onError) onError(pdata?.error);
+          return;
+        }
       }
-      const cRes = await fetch("/api/me/curp-rfc", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ curp, rfc }),
-      });
-      if (!cRes.ok) {
-        const data = await cRes.json();
-        setFetchError(data?.error || "No se pudo actualizar RFC/CURP.");
-        setSavingPlantel(false);
-        onError && onError(data?.error);
-        return;
+      // PATCH rfc, curp if changed
+      if (
+        String((user.rfc || "")).trim().toUpperCase() !== (rfc || "").trim().toUpperCase() ||
+        String((user.curp || "")).trim().toUpperCase() !== (curp || "").trim().toUpperCase()
+      ) {
+        const cRes = await fetch("/api/me/curp-rfc", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ curp, rfc }),
+        });
+        if (!cRes.ok) {
+          const data = await cRes.json();
+          setFetchError(data?.error || "No se pudo actualizar RFC/CURP.");
+          setSavingPlantel(false);
+          if (onError) onError(data?.error);
+          return;
+        }
       }
-      const eRes = await fetch("/api/me/email", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (!eRes.ok) {
-        const edata = await eRes.json();
-        setFetchError(edata?.error || "No se pudo actualizar correo electrónico.");
-        setSavingPlantel(false);
-        onError && onError(edata?.error);
-        return;
+      // PATCH email if changed
+      if ((user.email || "").trim() !== (email || "").trim()) {
+        const eRes = await fetch("/api/me/email", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!eRes.ok) {
+          const edata = await eRes.json();
+          setFetchError(edata?.error || "No se pudo actualizar correo electrónico.");
+          setSavingPlantel(false);
+          if (onError) onError(edata?.error);
+          return;
+        }
       }
+      // After all save cycles, update user object
       setUser(u => ({
         ...u,
         plantelId: parseInt(plantelId, 10),
@@ -139,12 +153,12 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         email: email.trim()
       }));
       setSavingPlantel(false);
-      fetchExpedienteSteps();
-      onSuccess && onSuccess();
+      await fetchExpedienteSteps();
+      if (onSuccess) onSuccess();
     } catch {
       setFetchError("No se pudo conectar.");
       setSavingPlantel(false);
-      onError && onError("No se pudo conectar.");
+      if (onError) onError("No se pudo conectar.");
     }
   }
 
@@ -228,7 +242,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     setSignatureLoading(false);
   }
 
-  // Always safely access stepStatus/stepHistory, fallback if not present
   let numUploadedDocs = 0;
   for (const key of requiredUploadSteps) {
     const status = (stepStatus && stepStatus[key]) ? stepStatus[key] : {};
@@ -243,14 +256,12 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const digitalPhotoDone = !!(stepStatus && stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled);
   const plantelFulfilled = !!user.plantelId;
 
-  // Guard current step lookup everywhere
   const step = steps[currentStep];
   const status = stepStatus && typeof stepStatus === "object" && stepStatus[step.key] ? stepStatus[step.key] : {};
   const historyDocs = (stepHistory && typeof stepHistory === "object" && Array.isArray(stepHistory?.[step.key])) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs.length ? historyDocs[0] : null;
   const { checklist, document, signature } = status;
 
-  // Navigation and step guards
   const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
   const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
   const isCurrentStepFulfilled = step.adminUploadOnly
@@ -284,7 +295,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     digitalPhotoDone &&
     plantelFulfilled;
 
-  // ---- UPDATED LOGIC: show welcome if role is "employee" (approved status) ----
   if (user && user.role === "employee") {
     return <WelcomeApproved user={user} />;
   }
@@ -310,7 +320,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
           steps={steps}
           activeStep={currentStep}
           onStepChange={(idx) => setCurrentStep(idx)}
-          stepStatus={stepStatus || {}} // always non-null
+          stepStatus={stepStatus || {}}
           allowFreeJump={true}
           className="py-1"
         />

@@ -1,13 +1,14 @@
 
 "use client";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { PlusCircleIcon, PencilSquareIcon, TrashIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 
 export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh }) {
   const [planteles, setPlanteles] = useState(initialPlanteles);
+  const [dataLoaded, setDataLoaded] = useState(!!initialPlanteles.length);
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
-  const [addLabel, setAddLabel] = useState(""); // NEW FIELD
+  const [addLabel, setAddLabel] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -18,27 +19,39 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
   const [msg, setMsg] = useState("");
   const addInputRef = useRef();
 
-  async function refetchPlanteles() {
-    if (onRefresh) return onRefresh();
+  async function fetchPlanteles() {
     setMsg("Cargando...");
     try {
       const res = await fetch("/api/admin/planteles/list", { credentials: "same-origin" });
       if (!res.ok) throw new Error("No se pudo cargar planteles.");
-      setPlanteles(await res.json());
+      const list = await res.json();
+      setPlanteles(list);
+      setDataLoaded(true);
       setMsg("");
     } catch (e) {
       setMsg("No se pudo actualizar.");
     }
   }
 
+  useEffect(() => {
+    if (!initialPlanteles.length) fetchPlanteles();
+    else setDataLoaded(true);
+    // eslint-disable-next-line
+  }, []);
+
+  async function refetchPlanteles() {
+    if (onRefresh) return onRefresh();
+    await fetchPlanteles();
+  }
+
   async function handleAddPlantel(e) {
     e.preventDefault();
     if (addName.trim().length < 2) {
-      setMsg("El nombre interno debe tener al menos 2 caracteres.");
+      setMsg("El nombre debe tener al menos 2 caracteres.");
       return;
     }
-    if (addLabel.trim().length < 2) {
-      setMsg("La etiqueta amigable debe tener al menos 2 caracteres.");
+    if ((addLabel || "").trim().length < 2) {
+      setMsg("La etiqueta debe tener al menos 2 caracteres.");
       return;
     }
     setAddLoading(true);
@@ -58,7 +71,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
       setAddName("");
       setAddLabel("");
       setMsg("Plantel agregado correctamente.");
-      await refetchPlanteles();
+      await fetchPlanteles();
     } catch (e) {
       setMsg(e.message || "Error al agregar");
     } finally {
@@ -68,8 +81,8 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
 
   function handleEditOpen(id, name, label) {
     setEditId(id);
-    setEditName(name);
-    setEditLabel(label);
+    setEditName(name || "");
+    setEditLabel(label || "");
   }
   function handleEditCancel() {
     setEditId(null);
@@ -78,8 +91,8 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
   }
   async function handleEditSubmit(e) {
     e.preventDefault();
-    if (editName.trim().length < 2) return setMsg("Nombre interno inválido.");
-    if (editLabel.trim().length < 2) return setMsg("Etiqueta amigable inválida.");
+    if ((editName || "").trim().length < 2) return setMsg("Nombre interno inválido.");
+    if ((editLabel || "").trim().length < 2) return setMsg("Etiqueta inválida.");
     setEditLoading(true);
     setMsg("");
     try {
@@ -95,7 +108,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
       }
       setMsg("Plantel actualizado.");
       setEditId(null); setEditName(""); setEditLabel("");
-      await refetchPlanteles();
+      await fetchPlanteles();
     } catch (e) {
       setMsg(e.message || "Error al renombrar");
     } finally {
@@ -124,7 +137,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
       }
       setMsg("Plantel eliminado.");
       setDeleteId(null);
-      await refetchPlanteles();
+      await fetchPlanteles();
     } catch (e) {
       setMsg(e.message || "Error al borrar");
     } finally {
@@ -154,115 +167,119 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
         <div className="mb-2 text-center text-xs font-semibold text-slate-700">{msg}</div>
       )}
       <div className="w-full overflow-x-auto">
-        <table className="min-w-full table-auto border rounded-xl text-xs sm:text-sm">
-          <thead>
-            <tr className="bg-cyan-50 border-b border-cyan-100">
-              <th className="px-3 py-2 text-left">ID</th>
-              <th className="px-3 py-2 text-left">Nombre interno (name)</th>
-              <th className="px-3 py-2 text-left">Etiqueta amigable (label)</th>
-              <th className="px-3 py-2 text-left">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {planteles.map((p) => (
-              <tr key={p.id} className="border-b border-cyan-50">
-                <td className="px-3 py-2">{p.id}</td>
-                <td className="px-3 py-2 font-mono">{editId === p.id ? (
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      className="rounded border border-cyan-200 px-2 py-1 text-xs"
-                      disabled={editLoading}
-                      autoFocus
-                      style={{ minWidth: 80 }}
-                      maxLength={80}
-                      aria-label="Nuevo nombre del plantel"
-                    />
-                ) : (
-                  p.name
-                )}</td>
-                <td className="px-3 py-2 font-semibold">
-                  {editId === p.id ? (
-                    <form onSubmit={handleEditSubmit} className="flex gap-1">
+        {!dataLoaded ? (
+          <div className="text-center p-6 text-gray-500 font-bold">Cargando&hellip;</div>
+        ) : (
+          <table className="min-w-full table-auto border rounded-xl text-xs sm:text-sm">
+            <thead>
+              <tr className="bg-cyan-50 border-b border-cyan-100">
+                <th className="px-3 py-2 text-left">ID</th>
+                <th className="px-3 py-2 text-left">Nombre interno</th>
+                <th className="px-3 py-2 text-left">Nombre comercial</th>
+                <th className="px-3 py-2 text-left">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {planteles.map((p) => (
+                <tr key={p.id} className="border-b border-cyan-50">
+                  <td className="px-3 py-2">{p.id}</td>
+                  <td className="px-3 py-2 font-mono">{editId === p.id ? (
                       <input
                         type="text"
-                        value={editLabel}
-                        onChange={e => setEditLabel(e.target.value)}
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
                         className="rounded border border-cyan-200 px-2 py-1 text-xs"
                         disabled={editLoading}
-                        style={{ minWidth: 100 }}
-                        maxLength={100}
-                        aria-label="Nueva etiqueta"
+                        autoFocus
+                        style={{ minWidth: 80 }}
+                        maxLength={80}
+                        aria-label="Nuevo nombre del plantel"
                       />
-                      <button
-                        type="submit"
-                        disabled={editLoading || !editLabel.trim()}
-                        className="bg-cyan-700 text-white py-1 px-3 rounded shadow text-xs font-bold hover:bg-cyan-900"
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        type="button"
-                        className="py-1 px-2 text-xs hover:text-red-500"
-                        onClick={handleEditCancel}
-                        disabled={editLoading}
-                      >
-                        Cancelar
-                      </button>
-                    </form>
                   ) : (
-                    p.label
-                  )}
-                </td>
-                <td className="px-3 py-2 flex gap-1">
-                  <button
-                    onClick={() => handleEditOpen(p.id, p.name, p.label)}
-                    className="hover:bg-cyan-50 px-2 py-1 rounded"
-                    title="Editar plantel"
-                    aria-label="Editar"
-                  >
-                    <PencilSquareIcon className="w-5 h-5 text-cyan-700" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTry(p.id)}
-                    className="hover:bg-red-50 px-2 py-1 rounded"
-                    title="Eliminar plantel"
-                    aria-label="Eliminar"
-                  >
-                    <TrashIcon className="w-5 h-5 text-red-600" />
-                  </button>
-                  {deleteId === p.id && (
-                    <span className="ml-2 flex gap-1 items-center text-red-600 font-bold">
-                      <button
-                        onClick={handleDeleteConfirm}
-                        disabled={deleteLoading}
-                        className="bg-red-700 hover:bg-red-900 text-white px-3 py-1 rounded-full font-bold text-xs shadow"
-                        type="button"
-                      >
-                        Confirmar borrar
-                      </button>
-                      <button
-                        onClick={handleDeleteCancel}
-                        className="text-xs font-bold px-2 py-1"
-                        type="button"
-                      >
-                        Cancelar
-                      </button>
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    p.name
+                  )}</td>
+                  <td className="px-3 py-2 font-semibold">
+                    {editId === p.id ? (
+                      <form onSubmit={handleEditSubmit} className="flex gap-1">
+                        <input
+                          type="text"
+                          value={editLabel ?? ""}
+                          onChange={e => setEditLabel(e.target.value)}
+                          className="rounded border border-cyan-200 px-2 py-1 text-xs"
+                          disabled={editLoading}
+                          style={{ minWidth: 100 }}
+                          maxLength={100}
+                          aria-label="Nueva etiqueta"
+                        />
+                        <button
+                          type="submit"
+                          disabled={editLoading || !(editLabel || "").trim()}
+                          className="bg-cyan-700 text-white py-1 px-3 rounded shadow text-xs font-bold hover:bg-cyan-900"
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          className="py-1 px-2 text-xs hover:text-red-500"
+                          onClick={handleEditCancel}
+                          disabled={editLoading}
+                        >
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : (
+                      p.label || ""
+                    )}
+                  </td>
+                  <td className="px-3 py-2 flex gap-1">
+                    <button
+                      onClick={() => handleEditOpen(p.id, p.name, p.label)}
+                      className="hover:bg-cyan-50 px-2 py-1 rounded"
+                      title="Editar plantel"
+                      aria-label="Editar"
+                    >
+                      <PencilSquareIcon className="w-5 h-5 text-cyan-700" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTry(p.id)}
+                      className="hover:bg-red-50 px-2 py-1 rounded"
+                      title="Eliminar plantel"
+                      aria-label="Eliminar"
+                    >
+                      <TrashIcon className="w-5 h-5 text-red-600" />
+                    </button>
+                    {deleteId === p.id && (
+                      <span className="ml-2 flex gap-1 items-center text-red-600 font-bold">
+                        <button
+                          onClick={handleDeleteConfirm}
+                          disabled={deleteLoading}
+                          className="bg-red-700 hover:bg-red-900 text-white px-3 py-1 rounded-full font-bold text-xs shadow"
+                          type="button"
+                        >
+                          Confirmar borrar
+                        </button>
+                        <button
+                          onClick={handleDeleteCancel}
+                          className="text-xs font-bold px-2 py-1"
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
       {addOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-xl px-7 py-8 max-w-sm w-[95vw] shadow-xl border border-cyan-100 flex flex-col items-center">
             <h3 className="font-bold text-lg text-cyan-800 mb-2">Nuevo Plantel</h3>
             <form onSubmit={handleAddPlantel} className="w-full flex flex-col items-stretch gap-3">
-              <label className="text-xs font-medium text-cyan-800 mb-1">Nombre interno (único, para gestión técnica)</label>
+              <label className="text-xs font-medium text-cyan-800 mb-1">Nombre interno (administrativo)</label>
               <input
                 ref={addInputRef}
                 type="text"
@@ -275,7 +292,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
                 disabled={addLoading}
                 placeholder="Ej: centro_21_marzo"
               />
-              <label className="text-xs font-medium text-cyan-800 mb-1">Etiqueta amigable (lo que verá el usuario)</label>
+              <label className="text-xs font-medium text-cyan-800 mb-1">Nombre comercial</label>
               <input
                 type="text"
                 className="rounded border border-cyan-300 px-3 py-2 text-base"
@@ -298,7 +315,7 @@ export default function PlantelListAdminPanel({ initialPlanteles = [], onRefresh
                 <button
                   type="submit"
                   className="bg-cyan-700 hover:bg-cyan-900 text-white text-xs font-bold rounded-full px-5 py-2 transition"
-                  disabled={addLoading || !addName.trim() || !addLabel.trim()}
+                  disabled={addLoading || !(addName || "").trim() || !(addLabel || "").trim()}
                 >
                   {addLoading ? "Agregando..." : "Agregar"}
                 </button>
