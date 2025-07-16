@@ -6,6 +6,7 @@ import Image from "next/image";
 import { ArrowRightEndOnRectangleIcon, CheckCircleIcon, KeyIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import OtherLoginPrompt from "@/components/OtherLoginPrompt";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -127,6 +128,7 @@ export default function Login() {
           ¿Aún no tienes cuenta?{" "}
           <a href="/register" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-emerald-600 transition">Regístrate aquí</a>
         </div>
+        <OtherLoginPrompt forRole="employee" className="mt-4" />
       </div>
     </div>
   );

@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import { ShieldCheckIcon, ArrowRightEndOnRectangleIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
-
 const GSI_CLIENT_ID = process.env.NEXT_PUBLIC_GSI_CLIENT_ID;
+import OtherLoginPrompt from "@/components/OtherLoginPrompt";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -106,9 +106,7 @@ export default function AdminLogin() {
           <ArrowRightEndOnRectangleIcon className="w-4 h-4 inline mr-1 mb-0.5 text-fuchsia-600 dark:text-fuchsia-300" />
           Solo personal autorizado con correo <span className="font-bold text-purple-900 dark:text-fuchsia-100">institucional</span>
         </div>
-        <div className="w-full text-center pt-2 text-xs text-slate-400">
-          ¿Eres empleado? <a href="/login" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-fuchsia-700 transition">Acceso de empleado</a>
-        </div>
+        <OtherLoginPrompt forRole="admin" className="mt-5" />
       </div>
     </div>
   );
