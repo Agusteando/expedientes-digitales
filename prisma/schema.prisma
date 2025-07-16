@@ -40,6 +40,7 @@ model User {
   puesto          String?
   sueldo          Decimal?
   horarioLaboral  String?
+  nss             String?
   // End ficha
 
   // External system IDs

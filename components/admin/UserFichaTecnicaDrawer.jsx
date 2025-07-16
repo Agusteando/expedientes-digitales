@@ -1,14 +1,15 @@
 
 "use client";
 import { useState, useEffect } from "react";
-import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
-// Removed "sueldo" from FIELDS
+// NSS field added to FIELDS
 const FIELDS = [
   { key: "rfc", label: "RFC", icon: IdentificationIcon },
   { key: "curp", label: "CURP", icon: KeyIcon },
   { key: "domicilioFiscal", label: "Domicilio fiscal", icon: HomeIcon },
+  { key: "nss", label: "NSS", icon: ShieldCheckIcon },
   { key: "fechaIngreso", label: "Fecha de ingreso", icon: CalendarDaysIcon },
   { key: "puesto", label: "Puesto", icon: Bars3BottomLeftIcon },
   { key: "horarioLaboral", label: "Horario laboral", icon: ClockIcon },
@@ -54,6 +55,7 @@ export default function UserFichaTecnicaDrawer({
             rfc: f.rfc ?? "",
             curp: f.curp ?? "",
             domicilioFiscal: f.domicilioFiscal ?? "",
+            nss: f.nss ?? "",
             fechaIngreso: f.fechaIngreso ? String(f.fechaIngreso).substring(0, 10) : "",
             puesto: f.puesto ?? "",
             horarioLaboral: f.horarioLaboral ?? "",
@@ -91,7 +93,6 @@ export default function UserFichaTecnicaDrawer({
     setSuccess("");
     setError("");
     try {
-      // Remove sueldo from payload
       const { sueldo, ...toSend } = ficha || {};
       const res = await fetch(`/api/admin/user/${user.id}/ficha-tecnica`, {
         method: "PATCH",

@@ -5,26 +5,30 @@ import { getSessionFromCookies } from "@/lib/auth";
 
 export async function GET(req, context) {
   const params = await context.params;
-  const { userId } = params;
-  const uid = parseInt(userId, 10);
-
   const session = await getSessionFromCookies(req.cookies);
-  if (!session || !["superadmin", "admin"].includes(session.role))
+  if (!session || !["superadmin", "admin"].includes(session.role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-
-  // For admin, enforce plantel scope
-  if (session.role === "admin") {
-    const user = await prisma.user.findUnique({ where: { id: uid } });
-    if (!user || !session.plantelesAdminIds?.includes(user.plantelId)) {
-      return NextResponse.json({ error: "No tienes permisos para ver este usuario" }, { status: 403 });
-    }
   }
-  const ficha = await prisma.user.findUnique({
-    where: { id: uid },
-    select: {
-      rfc: true, curp: true, domicilioFiscal: true, fechaIngreso: true,
-      puesto: true, sueldo: true, horarioLaboral: true, plantelId: true
-    }
-  });
-  return NextResponse.json({ ficha });
+  const userId = Number(params.userId);
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        rfc: true,
+        curp: true,
+        domicilioFiscal: true,
+        nss: true,
+        fechaIngreso: true,
+        puesto: true,
+        horarioLaboral: true,
+        plantelId: true,
+      }
+    });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    return NextResponse.json({ ficha: user });
+  } catch (e) {
+    return NextResponse.json({ error: e.message || "Error" }, { status: 500 });
+  }
 }
