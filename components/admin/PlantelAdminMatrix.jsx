@@ -5,7 +5,6 @@ import { ChevronDownIcon, ChevronUpIcon, UserIcon, CheckCircleIcon, DocumentDupl
 import Image from "next/image";
 
 function fichaProgress(user) {
-  // At least 7 ficha fields (rfc, curp, domicilioFiscal, fechaIngreso, puesto, sueldo, horarioLaboral)
   let total = 7;
   let filled = 0;
   if (user.rfc) filled++; if (user.curp) filled++;
@@ -33,30 +32,34 @@ export default function PlantelAdminMatrix({ planteles, admins }) {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState({});
   const [error, setError] = useState({});
+  const [allLoaded, setAllLoaded] = useState(false);
 
-  // Fetch per-plantel user progress data when expanding
-  async function fetchPlantelUsers(plantelId) {
-    if (data[plantelId] || loading[plantelId]) return;
-    setLoading(s => ({ ...s, [plantelId]: true }));
-    setError(e => ({ ...e, [plantelId]: "" }));
-    try {
-      const res = await fetch(`/api/admin/planteles/${plantelId}/users/progress`);
-      if (!res.ok) throw new Error((await res.text()).slice(0,120));
-      const d = await res.json();
-      setData(dat => ({ ...dat, [plantelId]: d.users }));
-    } catch (e) {
-      setError(err => ({ ...err, [plantelId]: e.message || "Error" }));
+  // Fetch all plantel user progress data on mount!
+  useEffect(() => {
+    async function fetchAllPlanteles() {
+      setAllLoaded(false);
+      const promises = planteles.map(async (p) => {
+        setLoading(s => ({ ...s, [p.id]: true }));
+        setError(e => ({ ...e, [p.id]: "" }));
+        try {
+          const res = await fetch(`/api/admin/planteles/${p.id}/users/progress`);
+          if (!res.ok) throw new Error((await res.text()).slice(0,120));
+          const d = await res.json();
+          setData(dat => ({ ...dat, [p.id]: d.users }));
+        } catch (e) {
+          setError(err => ({ ...err, [p.id]: e.message || "Error" }));
+        }
+        setLoading(s => ({ ...s, [p.id]: false }));
+      });
+      await Promise.all(promises);
+      setAllLoaded(true);
     }
-    setLoading(s => ({ ...s, [plantelId]: false }));
-  }
+    fetchAllPlanteles();
+    // eslint-disable-next-line
+  }, [planteles.map(p => p.id).join(",")]);
 
   function handleExpand(pid) {
-    if (expanded === pid) {
-      setExpanded(null);
-    } else {
-      setExpanded(pid);
-      fetchPlantelUsers(pid);
-    }
+    setExpanded(expanded === pid ? null : pid);
   }
 
   return (
@@ -77,7 +80,7 @@ export default function PlantelAdminMatrix({ planteles, admins }) {
             >
               <span>{p.name}</span>
               <span className="flex items-center gap-2">
-                <PlantelSummaryBar users={data[p.id]} expanded={expanded === p.id} />
+                <PlantelSummaryBar users={data[p.id]} loading={loading[p.id]} />
                 {expanded === p.id
                   ? <ChevronUpIcon className="w-7 h-7 text-cyan-400" />
                   : <ChevronDownIcon className="w-7 h-7 text-cyan-400" />
@@ -103,16 +106,19 @@ export default function PlantelAdminMatrix({ planteles, admins }) {
 }
 
 // Top bar with progress (SaaS style)
-function PlantelSummaryBar({ users = [], expanded }) {
-  if (!users.length)
-    return <span className="text-[13px] font-mono text-slate-400 ml-6">0 usuarios</span>;
-  const total = users.length;
+function PlantelSummaryBar({ users = [], loading }) {
+  // Count only active users (isActive: true)
+  const activeUsers = (users || []).filter(u => !!u.isActive);
+  if (loading === true || !Array.isArray(users)) {
+    return <span className="text-[13px] font-mono text-slate-400 ml-6 animate-pulse">Cargando...</span>;
+  }
+  const total = activeUsers.length;
   let complete = 0, ready = 0;
-  users.forEach(u => {
+  activeUsers.forEach(u => {
     if (u.role === "employee") complete++;
     if (u.readyForApproval) ready++;
   });
-  const pct = Math.round((complete/total)*100);
+  const pct = total === 0 ? 0 : Math.round((complete/total)*100);
   return (
     <span className="flex flex-row gap-1 items-center ml-8">
       <span className="text-xs text-cyan-500 mr-2">{total} usuarios</span>
