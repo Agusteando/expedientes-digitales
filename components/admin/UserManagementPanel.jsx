@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import UserManagementTable from "./UserManagementTable";
 import BulkActionBar from "./BulkActionBar";
 import UserDocsDrawer from "./UserDocsDrawer";
@@ -14,6 +14,12 @@ export default function UserManagementPanel({
   plantelesPermittedIds,
   canAssignPlantel
 }) {
+  const isSuperadmin = adminRole === "superadmin";
+  const isAdmin = adminRole === "admin";
+  const permittedPlanteles = isSuperadmin ? planteles : planteles.filter(p => plantelesPermittedIds?.includes(p.id));
+  const administratorsPlanteles = permittedPlanteles.map(p => p.id);
+
+  // State (move to top, before any useMemo)
   const [filter, setFilter] = useState("");
   const [plantelFilter, setPlantelFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -24,14 +30,10 @@ export default function UserManagementPanel({
   const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
   const [feedback, setFeedback] = useState({ type: null, message: "" });
 
-  const adminsPlanteles = adminRole === "superadmin"
-    ? planteles.map(p => p.id)
-    : plantelesPermittedIds || [];
-
-  const editablePlanteles = planteles.filter(p => adminsPlanteles.includes(p.id));
-
+  // Restrict users for admin ONLY TO THEIR PLANTEL
   const usersFiltered = useMemo(() => {
     return (users || [])
+      .filter(u => isSuperadmin || (isAdmin && administratorsPlanteles.includes(u.plantelId)))
       .filter(u =>
         (!filter || (
           String(u.name || "").toLowerCase().includes(filter.toLowerCase()) ||
@@ -45,10 +47,13 @@ export default function UserManagementPanel({
          (statusFilter === "incomplete" && !u.readyForApproval && u.role === "candidate")) &&
         (activeFilter === "todos" || (activeFilter === "activos" ? u.isActive : !u.isActive))
       );
-  }, [users, filter, plantelFilter, roleFilter, statusFilter, activeFilter]);
+  }, [
+    users, isSuperadmin, isAdmin, administratorsPlanteles,
+    filter, plantelFilter, roleFilter, statusFilter, activeFilter
+  ]);
 
   const selectedUserIds = useMemo(
-    () => Object.entries(selection).filter(([k,v]) => v).map(([k]) => Number(k)),
+    () => Object.entries(selection).filter(([k, v]) => v).map(([k]) => Number(k)),
     [selection]
   );
   const allSelected = usersFiltered.length > 0 && selectedUserIds.length === usersFiltered.length;
@@ -108,7 +113,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  // Receive eligible IDs (from BulkActionBar)
   async function handleBulkApprove(eligibleUserIds) {
     if (!eligibleUserIds || !eligibleUserIds.length) {
       setFeedback({ type: "error", message: "Ningún usuario seleccionado cumple requisitos." });
@@ -130,7 +134,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  // Activate/deactivate single
   async function handleSetActive(userId, isActive) {
     setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
     try {
@@ -148,7 +151,6 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  // Bulk activate/deactivate
   async function handleBulkSetActive(isActive) {
     setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
     for (let userId of selectedUserIds) {
@@ -159,8 +161,8 @@ export default function UserManagementPanel({
     window.location.reload();
   }
 
-  // User delete
   async function handleDelete(userId) {
+    if (!isSuperadmin) return;
     setFeedback({ type: "info", message: "Eliminando usuario..." });
     try {
       const res = await fetch(`/api/admin/user/${userId}/delete`, {
@@ -199,7 +201,7 @@ export default function UserManagementPanel({
             onChange={e => setPlantelFilter(e.target.value)}
           >
             <option value="">Plantel (todos)</option>
-            {planteles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {permittedPlanteles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select
             className="border border-cyan-200 rounded px-2 py-1 text-sm"
@@ -240,13 +242,13 @@ export default function UserManagementPanel({
       </header>
       <UserManagementTable
         users={usersFiltered}
-        planteles={planteles}
-        adminsPlanteles={adminsPlanteles}
+        planteles={permittedPlanteles}
+        adminsPlanteles={administratorsPlanteles}
         role={adminRole}
         selection={selection}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
-        canAssignPlantel={canAssignPlantel}
+        canAssignPlantel={canAssignPlantel && isSuperadmin}
         onSelectUser={handleSelectUser}
         onSelectAll={handleSelectAll}
         onAssignPlantel={handleAssignPlantel}
@@ -254,15 +256,15 @@ export default function UserManagementPanel({
         onDocs={handleOpenDocs}
         onFichaTecnica={handleOpenFichaTecnica}
         onSetActive={handleSetActive}
-        onDelete={handleDelete}
+        onDelete={isSuperadmin ? handleDelete : undefined}
       />
       <BulkActionBar
         users={usersFiltered}
-        planteles={planteles}
+        planteles={permittedPlanteles}
         adminRole={adminRole}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
-        canAssignPlantel={canAssignPlantel}
+        canAssignPlantel={canAssignPlantel && isSuperadmin}
         onBulkAssign={handleBulkAssign}
         onBulkApprove={handleBulkApprove}
         onBulkSetActive={handleBulkSetActive}
@@ -275,9 +277,9 @@ export default function UserManagementPanel({
       <UserFichaTecnicaDrawer
         open={fichaDrawer.open}
         user={fichaDrawer.user}
-        planteles={planteles}
-        canEdit={fichaDrawer.open && fichaDrawer.user && (adminRole === "superadmin" || adminsPlanteles.includes(fichaDrawer.user.plantelId))}
-        editablePlanteles={editablePlanteles}
+        planteles={permittedPlanteles}
+        canEdit={fichaDrawer.open && fichaDrawer.user && (isSuperadmin || administratorsPlanteles.includes(fichaDrawer.user.plantelId))}
+        editablePlanteles={permittedPlanteles}
         onClose={closeFichaDrawer}
       />
     </section>

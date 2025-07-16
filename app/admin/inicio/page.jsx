@@ -10,23 +10,20 @@ import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
 import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
 
-// Utility to calculate “complete expediente”
+// Determine "expediente completo"
 function isUserExpedienteComplete(user) {
   const fichaFields = [user.rfc, user.curp, user.domicilioFiscal, user.fechaIngreso, user.puesto, user.sueldo, user.horarioLaboral, user.plantelId];
   const fichaOk = fichaFields.every(f => !!f && String(f).trim().length > 0);
-
   const requiredKeys = new Set((require("@/components/stepMetaExpediente").stepsExpediente || [])
     .filter(s => !s.signable && !s.isPlantelSelection)
     .map(s => s.key));
   const checklistOk = Array.from(requiredKeys).every(key =>
     user.checklistItems?.some(item => item.type === key && item.fulfilled));
-
   const regSig = user.signatures?.find(s => s.type === "reglamento");
   const contSig = user.signatures?.find(s => s.type === "contrato");
   const firmasOk =
     regSig && ["signed", "completed"].includes(regSig.status) &&
     contSig && ["signed", "completed"].includes(contSig.status);
-
   return fichaOk && checklistOk && firmasOk && !!user.plantelId;
 }
 
@@ -42,17 +39,22 @@ export default async function AdminInicioPage({ searchParams }) {
     );
   }
 
-  const planteles = await prisma.plantel.findMany({
+  // Only pass permitted planteles to ADMIN
+  let planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true }
   });
+  let scopedPlantelIds, plantelesScoped;
+  if (session.role === "superadmin") {
+    scopedPlantelIds = planteles.map(p => p.id);
+    plantelesScoped = planteles;
+  } else {
+    scopedPlantelIds = (session.plantelesAdminIds || []);
+    plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
+  }
 
-  const scopedPlantelIds = session.role === "superadmin"
-    ? planteles.map(p => p.id)
-    : (session.plantelesAdminIds || []);
-  const plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
-
-  const users = await prisma.user.findMany({
+  // Only pass users in permitted planteles to ADMIN
+  let users = await prisma.user.findMany({
     where: {
       role: { in: ["employee", "candidate"] },
       ...(session.role === "admin" ? { plantelId: { in: scopedPlantelIds } } : {})
@@ -63,15 +65,20 @@ export default async function AdminInicioPage({ searchParams }) {
     },
     orderBy: { name: "asc" }
   });
-
   const userIds = users.map(u => u.id);
 
+  // Extra safety: block any user not in permitted plantel from ever being seen by admin
+  if (session.role === "admin") {
+    users = users.filter(u => u.plantelId && scopedPlantelIds.includes(u.plantelId));
+  }
+
   if (typeof prisma.checklistItem !== "object" || typeof prisma.checklistItem.findMany !== "function") {
-    console.error("[app/admin/inicio/page.jsx] FATAL: prisma.checklistItem is undefined or missing 'findMany'. This indicates your Prisma Client is out-of-date. Please run: npx prisma generate");
     return (
       <div className="p-10 text-center text-red-700 font-bold">
-        <div>Error: prisma.checklistItem is missing on your Prisma Client instance.<br />
-        <span className="text-black">Did you recently change your schema or add a model? <b>Run <span className="font-mono bg-slate-200 rounded px-2 py-0.5">npx prisma generate</span> and restart your server</b>.</span></div>
+        <div>
+          Error: prisma.checklistItem is missing on your Prisma Client instance.<br />
+          <span className="text-black">Did you recently change your schema or add a model? <b>Run <span className="font-mono bg-slate-200 rounded px-2 py-0.5">npx prisma generate</span> and restart your server</b>.</span>
+        </div>
       </div>
     );
   }
@@ -92,7 +99,6 @@ export default async function AdminInicioPage({ searchParams }) {
     (byUserSigs[s.userId] ||= []).push(s);
   }
 
-  // Helper to check if user is ready for approval (candidate, active, all docs, both firmas ok)
   const stepsExpediente = require("@/components/stepMetaExpediente").stepsExpediente;
   const checklistRequiredKeys = stepsExpediente.filter(
     s => !s.signable && !s.isPlantelSelection
@@ -118,7 +124,6 @@ export default async function AdminInicioPage({ searchParams }) {
     readyForApproval: readyForApproval(u)
   }));
 
-  // **THIS IS WHERE THE FILTER HAPPENS:**
   const plantelData = plantelesScoped
     .map(p => {
       const pUsers = usersFull.filter(u => u.plantelId === p.id);
@@ -157,15 +162,19 @@ export default async function AdminInicioPage({ searchParams }) {
   const adminRole = session.role;
   const adminPlantelesPermittedIds = session.plantelesAdminIds;
 
-  const admins = await prisma.user.findMany({
-    where: { role: { in: ["admin", "superadmin"] } },
-    include: { plantelesAdmin: { select: { id: true } } },
-    orderBy: { name: "asc" }
-  });
+  let admins = [];
+  if (session.role === "superadmin") {
+    admins = await prisma.user.findMany({
+      where: { role: { in: ["admin", "superadmin"] } },
+      include: { plantelesAdmin: { select: { id: true } } },
+      orderBy: { name: "asc" }
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
       <AdminNav session={session} />
+
       <div className="w-full max-w-7xl mt-20">
         <AdminDashboardStats
           summary={{

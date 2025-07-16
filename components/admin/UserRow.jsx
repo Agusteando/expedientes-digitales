@@ -17,7 +17,7 @@ export default function UserRow({
   onDocs,
   onFichaTecnica,
   onSetActive,
-  onDelete,
+  onDelete // undefined unless superadmin
 }) {
   const [confirmAction, setConfirmAction] = useState(null);
 
@@ -26,6 +26,7 @@ export default function UserRow({
     return role === "superadmin" || adminsPlanteles.includes(pid);
   }
   const canBeApproved = user.role === "candidate" && user.readyForApproval && isActive;
+  const canDelete = role === "superadmin" && typeof onDelete === "function" && user.id !== undefined;
 
   let statusBadge =
     isActive
@@ -35,13 +36,9 @@ export default function UserRow({
   const canToggleActive = role === "superadmin" ||
     (role === "admin" && user.plantelId && adminsPlanteles.includes(user.plantelId) && user.id !== undefined);
 
-  // --- Restrict deletion to ONLY superadmin ---
-  const canDelete = role === "superadmin" && user.id !== undefined;
-
   return (
     <tr className={`${selected ? "bg-cyan-50" : ""} ${!isActive ? "opacity-60 bg-gray-100" : ""}`}>
       <td className="text-center px-2 py-2">
-        {/* ALLOW SELECTION REGARDLESS OF STATUS */}
         <input
           type="checkbox"
           checked={selected}
@@ -190,7 +187,8 @@ export default function UserRow({
             </div>
           </div>
         )}
-        {confirmAction?.type === "delete" && confirmAction.user.id === user.id && (
+        {/* SUPERADMIN-ONLY confirmation dialog for delete */}
+        {canDelete && confirmAction?.type === "delete" && confirmAction.user.id === user.id && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
             <div className="bg-white shadow-xl rounded-xl p-6 max-w-xs w-full text-center">
               <p className="mb-4 text-black font-bold">
@@ -204,7 +202,7 @@ export default function UserRow({
                 >Cancelar</button>
                 <button
                   className="px-4 py-2 rounded bg-red-700 text-white font-bold"
-                  onClick={() => { setConfirmAction(null); onDelete(user.id); }}
+                  onClick={() => { setConfirmAction(null); if (typeof onDelete === "function") onDelete(user.id); }}
                   disabled={false}
                 >Eliminar</button>
               </div>

@@ -2,7 +2,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function AdminNav({ session }) {
   const router = useRouter();
@@ -47,7 +47,6 @@ export default function AdminNav({ session }) {
     setOpen(false);
 
     if (mode === "adminview") {
-      // If only one admin, impersonate immediately
       await fetchAdmins();
       if (adminCandidates.length === 1) {
         const adminId = adminCandidates[0].id;
@@ -99,9 +98,45 @@ export default function AdminNav({ session }) {
     setSwitching(false);
   }
 
+  // --- Only superadmin ever sees impersonate/switch controls OR impersonation banner
+  if (session.role !== "superadmin") return (
+    <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30">
+      <a href="/admin/inicio" className="flex items-center gap-2">
+        <span className="flex items-center">
+          <Image
+            src="/signia.png"
+            alt="IECS-IEDIS"
+            width={120}
+            height={40}
+            className="object-contain rounded bg-white shadow-sm"
+            priority
+          />
+        </span>
+      </a>
+      <div className="flex items-center gap-3">
+        <span className="text-xs sm:text-sm text-slate-700 font-semibold">{session.name}</span>
+        <Image
+          alt="profile"
+          src={session.picture || "/IMAGOTIPO-IECS-IEDIS.png"}
+          width={32}
+          height={32}
+          className="rounded-full bg-slate-100"
+        />
+        <form action="/api/auth/logout" method="POST">
+          <button
+            type="submit"
+            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-full text-xs shadow"
+            title="Cerrar sesión"
+          >Cerrar sesión</button>
+        </form>
+      </div>
+    </nav>
+  );
+
+  // --- SUPERADMIN NAV ---
   return (
     <>
-      {/* Impersonation banner */}
+      {/* Impersonation banner (only for superadmin while impersonating) */}
       {isImpersonated && (
         <div className="fixed z-[9999] top-0 left-0 w-full bg-yellow-100 text-yellow-900 text-center py-2 px-4 flex items-center justify-center gap-3 font-bold text-xs shadow border-b-2 border-yellow-300 animate-fade-in">
           Estás impersonificando a un administrador ({session.email}, {session.name}). &nbsp;
@@ -117,7 +152,6 @@ export default function AdminNav({ session }) {
       )}
       <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30" style={{marginTop: isImpersonated ? 48 : 0}}>
         <a href="/admin/inicio" className="flex items-center gap-2">
-          {/* IECS-IEDIS Logo: signia.png replaces text */}
           <span className="flex items-center">
             <Image
               src="/signia.png"
@@ -130,37 +164,35 @@ export default function AdminNav({ session }) {
           </span>
         </a>
         <div className="flex items-center gap-3">
-          {isSuperadmin && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setOpen(!open)}
-                className="rounded px-3 py-2 bg-slate-50 border font-semibold text-xs text-slate-800 hover:bg-slate-100 select-none shadow flex items-center gap-1"
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={open}
-                title="Cambiar panel"
-              >
-                Vista: {forceAdminView ? "Administrador de plantel" : "Superadmin"}
-                <svg width={14} height={14} className="inline" viewBox="0 0 20 20"><path d="M5 8l5 5 5-5H5z" fill="currentColor"/></svg>
-              </button>
-              {open && (
-                <div className="absolute right-0 mt-1 min-w-max bg-white border rounded shadow z-50 select-none animate-fade-in flex flex-col">
-                  <button
-                    className={`w-full px-4 py-2 text-left text-sm hover:bg-purple-50 ${!forceAdminView ? "font-bold bg-purple-50" : ""}`}
-                    onClick={() => handleSwitchImpersonation("superadmin")}
-                    tabIndex={0}
-                    type="button"
-                  >Superadmin</button>
-                  <button
-                    className={`w-full px-4 py-2 text-left text-sm hover:bg-cyan-50 ${forceAdminView ? "font-bold bg-cyan-50" : ""}`}
-                    onClick={() => handleSwitchImpersonation("adminview")}
-                    tabIndex={0}
-                    type="button"
-                  >Administrador de plantel</button>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setOpen(!open)}
+              className="rounded px-3 py-2 bg-slate-50 border font-semibold text-xs text-slate-800 hover:bg-slate-100 select-none shadow flex items-center gap-1"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              title="Cambiar panel"
+            >
+              Vista: {forceAdminView ? "Administrador de plantel" : "Superadmin"}
+              <svg width={14} height={14} className="inline" viewBox="0 0 20 20"><path d="M5 8l5 5 5-5H5z" fill="currentColor"/></svg>
+            </button>
+            {open && (
+              <div className="absolute right-0 mt-1 min-w-max bg-white border rounded shadow z-50 select-none animate-fade-in flex flex-col">
+                <button
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-purple-50 ${!forceAdminView ? "font-bold bg-purple-50" : ""}`}
+                  onClick={() => handleSwitchImpersonation("superadmin")}
+                  tabIndex={0}
+                  type="button"
+                >Superadmin</button>
+                <button
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-cyan-50 ${forceAdminView ? "font-bold bg-cyan-50" : ""}`}
+                  onClick={() => handleSwitchImpersonation("adminview")}
+                  tabIndex={0}
+                  type="button"
+                >Administrador de plantel</button>
+              </div>
+            )}
+          </div>
           <span className="text-xs sm:text-sm text-slate-700 font-semibold">{session.name}</span>
           <Image
             alt="profile"
