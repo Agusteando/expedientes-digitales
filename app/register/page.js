@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { UserPlusIcon, CheckCircleIcon, DocumentTextIcon } from "@heroicons/react/24/solid";
+import { UserPlusIcon, CheckCircleIcon, DocumentTextIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
 
 // Privacy Notice Step Component
@@ -233,6 +233,12 @@ function PrivacyStep({ onAccept }) {
   );
 }
 
+// Password validation/check helper
+function validatePassword(password) {
+  // Only basic: minimum 7 chars (you can add more complexity here)
+  return !!password && password.length >= 7;
+}
+
 // Registration Form Step
 function RegisterFormStep({ disabled }) {
   const [form, setForm] = useState({
@@ -244,26 +250,75 @@ function RegisterFormStep({ disabled }) {
     rfc: ""
   });
   const [error, setError] = useState("");
+  const [serverError, setServerError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword2, setShowPassword2] = useState(false);
+
   const router = useRouter();
+
+  // Real-time validation
+  const [touched, setTouched] = useState({});
+  const markTouched = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
+
+  const errors = {
+    name: !form.name ? "El nombre es obligatorio." : "",
+    email: !form.email
+      ? "El correo es obligatorio."
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
+      ? "El correo no es válido."
+      : "",
+    curp: !form.curp
+      ? "El CURP es obligatorio."
+      : form.curp.length !== 18
+      ? "El CURP debe tener 18 caracteres."
+      : "",
+    rfc: !form.rfc
+      ? "El RFC es obligatorio."
+      : form.rfc.length < 12 || form.rfc.length > 13
+      ? "El RFC debe tener entre 12 y 13 caracteres."
+      : "",
+    password: !form.password
+      ? "La contraseña es obligatoria."
+      : form.password.length < 7
+      ? "La contraseña debe tener al menos 7 caracteres."
+      : "",
+    password2: !form.password2
+      ? "Repite la contraseña."
+      : form.password2 !== form.password
+      ? "Las contraseñas no coinciden."
+      : "",
+  };
 
   function formChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
+    setError("");
+    setServerError("");
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setServerError("");
     setSuccess("");
-    if (!form.name || !form.email || !form.password || !form.password2 || !form.curp || !form.rfc) {
-      setError("Por favor llena todos los campos requeridos.");
+    // Mark all as touched for UI
+    setTouched({
+      name: true,
+      email: true,
+      password: true,
+      password2: true,
+      curp: true,
+      rfc: true,
+    });
+
+    // Find first error
+    const firstErrorField = Object.keys(errors).find((key) => errors[key]);
+    if (firstErrorField) {
+      setError(errors[firstErrorField]);
       return;
     }
-    if (form.password !== form.password2) {
-      setError("Las contraseñas no coinciden.");
-      return;
-    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
@@ -279,17 +334,24 @@ function RegisterFormStep({ disabled }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "No se pudo registrar.");
+        setServerError(data.error || "No se pudo registrar.");
         setLoading(false);
         return;
       }
       setSuccess("Registro exitoso, puedes iniciar sesión.");
       setTimeout(() => router.push("/login"), 1400);
     } catch (e) {
-      setError("No se pudo conectar.");
+      setServerError("No se pudo conectar.");
       setLoading(false);
     }
   }
+
+  // Password requirement UI
+  const passwordReq =
+    "La contraseña debe tener al menos 7 caracteres. Puede contener letras, números, signos o símbolos.";
+
+  const passwordValid = validatePassword(form.password);
+  const passwordsMatch = !!form.password && !!form.password2 && form.password === form.password2;
 
   return (
     <div
@@ -324,22 +386,34 @@ function RegisterFormStep({ disabled }) {
             Nombre completo
           </label>
           <input
-            className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
+            className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+              touched.name && errors.name
+                ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+            } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
             id="name"
             name="name"
             autoComplete="name"
             required
             value={form.name}
             onChange={formChange}
+            onBlur={() => markTouched("name")}
             placeholder="Ingresa tu nombre"
           />
+          {touched.name && errors.name && (
+            <div className="text-xs text-red-600 mt-1">{errors.name}</div>
+          )}
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="email">
             Correo electrónico
           </label>
           <input
-            className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
+            className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+              touched.email && errors.email
+                ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+            } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
             id="email"
             name="email"
             autoComplete="email"
@@ -347,8 +421,12 @@ function RegisterFormStep({ disabled }) {
             required
             value={form.email}
             onChange={formChange}
+            onBlur={() => markTouched("email")}
             placeholder="ejemplo@dominio.com"
           />
+          {touched.email && errors.email && (
+            <div className="text-xs text-red-600 mt-1">{errors.email}</div>
+          )}
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -356,7 +434,11 @@ function RegisterFormStep({ disabled }) {
               CURP
             </label>
             <input
-              className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm uppercase tracking-wide placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
+              className={`block w-full rounded-lg border px-3 py-3 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 transition ${
+                touched.curp && errors.curp
+                  ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                  : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+              } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
               id="curp"
               name="curp"
               autoComplete="off"
@@ -365,15 +447,23 @@ function RegisterFormStep({ disabled }) {
               maxLength={18}
               value={form.curp}
               onChange={formChange}
+              onBlur={() => markTouched("curp")}
               placeholder="GOMC960912HDFRRL04"
             />
+            {touched.curp && errors.curp && (
+              <div className="text-xs text-red-600 mt-1">{errors.curp}</div>
+            )}
           </div>
           <div className="flex-1">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="rfc">
               RFC
             </label>
             <input
-              className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm uppercase tracking-wide placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
+              className={`block w-full rounded-lg border px-3 py-3 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 transition ${
+                touched.rfc && errors.rfc
+                  ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                  : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+              } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
               id="rfc"
               name="rfc"
               autoComplete="off"
@@ -382,8 +472,12 @@ function RegisterFormStep({ disabled }) {
               maxLength={13}
               value={form.rfc}
               onChange={formChange}
+              onBlur={() => markTouched("rfc")}
               placeholder="GOMC960912QX2"
             />
+            {touched.rfc && errors.rfc && (
+              <div className="text-xs text-red-600 mt-1">{errors.rfc}</div>
+            )}
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
@@ -391,33 +485,120 @@ function RegisterFormStep({ disabled }) {
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="password">
               Contraseña
             </label>
-            <input
-              className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
-              id="password"
-              name="password"
-              autoComplete="new-password"
-              type="password"
-              required
-              value={form.password}
-              onChange={formChange}
-              placeholder="••••••••"
-            />
+            <div className="relative flex items-center">
+              <input
+                className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition pr-10 ${
+                  touched.password && errors.password
+                    ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                    : passwordValid && form.password
+                    ? "border-emerald-400 dark:border-emerald-400 focus:ring-emerald-400"
+                    : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+                } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
+                id="password"
+                name="password"
+                autoComplete="new-password"
+                type={showPassword ? "text" : "password"}
+                required
+                value={form.password}
+                onChange={formChange}
+                onBlur={() => markTouched("password")}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={showPassword ? "Ocultar" : "Mostrar"}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-2.5 text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-300 z-10 focus:outline-none"
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="w-5 h-5" />
+                ) : (
+                  <EyeIcon className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+            <div className="mt-1 flex flex-row items-center gap-2">
+              <div
+                className={`text-xs ${
+                  form.password
+                    ? passwordValid
+                      ? "text-emerald-600 flex items-center gap-1"
+                      : "text-red-600 font-medium"
+                    : "text-gray-500"
+                }`}
+              >
+                {passwordValid ? (
+                  <span className="flex items-center gap-1">
+                    <CheckCircleIcon className="w-4 h-4" /> Requisito de contraseña cumplido
+                  </span>
+                ) : (
+                  passwordReq
+                )}
+              </div>
+            </div>
+            {touched.password && errors.password && (
+              <div className="text-xs text-red-600 mt-1">{errors.password}</div>
+            )}
           </div>
           <div className="flex-1">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="password2">
               Repetir contraseña
             </label>
-            <input
-              className="block w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:text-white transition"
-              id="password2"
-              name="password2"
-              autoComplete="new-password"
-              type="password"
-              required
-              value={form.password2}
-              onChange={formChange}
-              placeholder="••••••••"
-            />
+            <div className="relative flex items-center">
+              <input
+                className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition pr-10 ${
+                  touched.password2 && errors.password2
+                    ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                    : passwordsMatch && form.password2
+                    ? "border-emerald-400 dark:border-emerald-400 focus:ring-emerald-400"
+                    : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+                } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
+                id="password2"
+                name="password2"
+                autoComplete="new-password"
+                type={showPassword2 ? "text" : "password"}
+                required
+                value={form.password2}
+                onChange={formChange}
+                onBlur={() => markTouched("password2")}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={showPassword2 ? "Ocultar" : "Mostrar"}
+                onClick={() => setShowPassword2((v) => !v)}
+                className="absolute right-2 top-2.5 text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-300 z-10 focus:outline-none"
+              >
+                {showPassword2 ? (
+                  <EyeSlashIcon className="w-5 h-5" />
+                ) : (
+                  <EyeIcon className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+            <div className="mt-1 flex items-center gap-1 text-xs">
+              {form.password && form.password2 ? (
+                passwordsMatch ? (
+                  <span className="text-emerald-600 flex items-center gap-1">
+                    <CheckCircleIcon className="w-4 h-4" />
+                    Las contraseñas coinciden
+                  </span>
+                ) : (
+                  <span className="text-red-600 font-medium">
+                    Las contraseñas no coinciden.
+                  </span>
+                )
+              ) : (
+                <span className="text-gray-500">
+                  Vuelve a ingresar tu contraseña.
+                </span>
+              )}
+            </div>
+            {touched.password2 && errors.password2 && (
+              <div className="text-xs text-red-600 mt-1">{errors.password2}</div>
+            )}
           </div>
         </div>
         <button
@@ -427,9 +608,9 @@ function RegisterFormStep({ disabled }) {
         >
           {loading ? "Registrando..." : "Registrarme"}
         </button>
-        {error && (
+        {(error || serverError) && (
           <div className="w-full mt-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-semibold text-center">
-            {error}
+            {error || serverError}
           </div>
         )}
         {success && (
