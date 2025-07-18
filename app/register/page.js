@@ -50,6 +50,7 @@ function PrivacyStep({ onAccept }) {
           className="overflow-y-auto max-h-[55vh] px-4 pr-6 py-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800 scroll-smooth text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify"
           tabIndex={0}
         >
+          {/* [omitted as in original] */}
           <h1 className="text-2xl sm:text-3xl font-bold text-center text-gray-800 dark:text-white mb-6">
             Aviso de Privacidad Integral
           </h1>
@@ -235,7 +236,6 @@ function PrivacyStep({ onAccept }) {
 
 // Password validation/check helper
 function validatePassword(password) {
-  // Only basic: minimum 7 chars (you can add more complexity here)
   return !!password && password.length >= 7;
 }
 
@@ -249,8 +249,9 @@ function RegisterFormStep({ disabled }) {
     curp: "",
     rfc: ""
   });
-  const [error, setError] = useState("");
-  const [serverError, setServerError] = useState("");
+  // Separate error states for: local-validation errors, API-field errors, top-level error
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [serverTopError, setServerTopError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -258,51 +259,76 @@ function RegisterFormStep({ disabled }) {
 
   const router = useRouter();
 
-  // Real-time validation
   const [touched, setTouched] = useState({});
   const markTouched = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
 
-  const errors = {
-    name: !form.name ? "El nombre es obligatorio." : "",
-    email: !form.email
-      ? "El correo es obligatorio."
-      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
-      ? "El correo no es válido."
-      : "",
-    curp: !form.curp
-      ? "El CURP es obligatorio."
-      : form.curp.length !== 18
-      ? "El CURP debe tener 18 caracteres."
-      : "",
-    rfc: !form.rfc
-      ? "El RFC es obligatorio."
-      : form.rfc.length < 12 || form.rfc.length > 13
-      ? "El RFC debe tener entre 12 y 13 caracteres."
-      : "",
-    password: !form.password
-      ? "La contraseña es obligatoria."
-      : form.password.length < 7
-      ? "La contraseña debe tener al menos 7 caracteres."
-      : "",
-    password2: !form.password2
-      ? "Repite la contraseña."
-      : form.password2 !== form.password
-      ? "Las contraseñas no coinciden."
-      : "",
+  // LOCAL FIELD VALIDATION
+  function fieldError(field, value = undefined) {
+    const val = value !== undefined ? value : form[field];
+    switch (field) {
+      case "name":
+        if (!val) return "El nombre es obligatorio.";
+        if (val.trim().length < 2) return "Tu nombre debe contener al menos 2 caracteres.";
+        return "";
+      case "email":
+        if (!val) return "El correo electrónico es obligatorio.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return "El correo electrónico no es válido.";
+        return "";
+      case "curp":
+        if (!val) return "El CURP es obligatorio.";
+        if (val.length !== 18) return "El CURP debe tener exactamente 18 caracteres.";
+        if (!/^[A-Z]{4}\d{6}[A-Z]{6}\d{2}$/.test((val || "").toUpperCase()))
+          return "El CURP no tiene un formato válido.";
+        return "";
+      case "rfc":
+        if (!val) return "El RFC es obligatorio.";
+        if (val.length < 12 || val.length > 13)
+          return "El RFC debe tener entre 12 y 13 caracteres.";
+        if (!/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test((val || "").toUpperCase()))
+          return "El RFC no tiene un formato válido.";
+        return "";
+      case "password":
+        if (!val) return "La contraseña es obligatoria.";
+        if (val.length < 7) return "La contraseña debe tener al menos 7 caracteres.";
+        return "";
+      case "password2":
+        if (!val) return "Repite la contraseña.";
+        if (val !== form.password) return "Las contraseñas no coinciden.";
+        return "";
+      default:
+        return "";
+    }
+  }
+
+  // Build errors object for client side
+  const localFieldErrors = {
+    name: fieldError("name"),
+    email: fieldError("email"),
+    curp: fieldError("curp"),
+    rfc: fieldError("rfc"),
+    password: fieldError("password"),
+    password2: fieldError("password2"),
   };
+
+  // Compose display error for field: API error > client validation
+  function displayFieldError(field) {
+    // If server returned this error, show it (most important), otherwise show local validation error if touched
+    if (fieldErrors && fieldErrors[field]) return fieldErrors[field];
+    if (touched[field] && localFieldErrors[field]) return localFieldErrors[field];
+    return "";
+  }
 
   function formChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setError("");
-    setServerError("");
+    setServerTopError("");
+    // Remove API error for this field as user edits (to force revalidation/fresh state)
+    setFieldErrors(errors => ({ ...errors, [e.target.name]: undefined }));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError("");
-    setServerError("");
+    setServerTopError("");
     setSuccess("");
-    // Mark all as touched for UI
     setTouched({
       name: true,
       email: true,
@@ -311,11 +337,12 @@ function RegisterFormStep({ disabled }) {
       curp: true,
       rfc: true,
     });
-
     // Find first error
-    const firstErrorField = Object.keys(errors).find((key) => errors[key]);
+    const firstErrorField = Object.keys(localFieldErrors).find((key) => localFieldErrors[key]);
     if (firstErrorField) {
-      setError(errors[firstErrorField]);
+      // Show immediate error visually under field, remove stale API errors
+      setFieldErrors({});
+      setServerTopError(localFieldErrors[firstErrorField] || "Por favor corrige los errores.");
       return;
     }
 
@@ -334,14 +361,29 @@ function RegisterFormStep({ disabled }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setServerError(data.error || "No se pudo registrar.");
+        if (data && data.errors) {
+          // Set each field error (show at field level)
+          setFieldErrors(data.errors);
+          // If any general or multiple errors, show a summary at top with priority: either first field error, or a count
+          const errorSummary =
+            Object.values(data.errors).length === 1
+              ? Object.values(data.errors)[0]
+              : "Corrige los datos marcados y vuelve a intentarlo.";
+          setServerTopError(errorSummary);
+        } else if (data && data.error) {
+          setServerTopError(data.error);
+        } else {
+          setServerTopError("Error en el servidor. Intenta de nuevo.");
+        }
         setLoading(false);
         return;
       }
       setSuccess("Registro exitoso, puedes iniciar sesión.");
+      setFieldErrors({});
+      setServerTopError("");
       setTimeout(() => router.push("/login"), 1400);
     } catch (e) {
-      setServerError("No se pudo conectar.");
+      setServerTopError("No se pudo conectar con el servidor. Intenta de nuevo.");
       setLoading(false);
     }
   }
@@ -380,14 +422,19 @@ function RegisterFormStep({ disabled }) {
           Regístrate para acceder a IECS-IEDIS
         </p>
       </div>
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} autoComplete="off">
+      {serverTopError && (
+        <div className="w-full mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-semibold text-center">
+          {serverTopError}
+        </div>
+      )}
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit} autoComplete="off" noValidate>
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="name">
             Nombre completo
           </label>
           <input
             className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
-              touched.name && errors.name
+              displayFieldError("name")
                 ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                 : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
             } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
@@ -399,9 +446,10 @@ function RegisterFormStep({ disabled }) {
             onChange={formChange}
             onBlur={() => markTouched("name")}
             placeholder="Ingresa tu nombre"
+            aria-invalid={!!displayFieldError("name")}
           />
-          {touched.name && errors.name && (
-            <div className="text-xs text-red-600 mt-1">{errors.name}</div>
+          {displayFieldError("name") && (
+            <div className="text-xs text-red-600 mt-1">{displayFieldError("name")}</div>
           )}
         </div>
         <div>
@@ -410,7 +458,7 @@ function RegisterFormStep({ disabled }) {
           </label>
           <input
             className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
-              touched.email && errors.email
+              displayFieldError("email")
                 ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                 : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
             } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
@@ -423,9 +471,10 @@ function RegisterFormStep({ disabled }) {
             onChange={formChange}
             onBlur={() => markTouched("email")}
             placeholder="ejemplo@dominio.com"
+            aria-invalid={!!displayFieldError("email")}
           />
-          {touched.email && errors.email && (
-            <div className="text-xs text-red-600 mt-1">{errors.email}</div>
+          {displayFieldError("email") && (
+            <div className="text-xs text-red-600 mt-1">{displayFieldError("email")}</div>
           )}
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
@@ -435,7 +484,7 @@ function RegisterFormStep({ disabled }) {
             </label>
             <input
               className={`block w-full rounded-lg border px-3 py-3 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 transition ${
-                touched.curp && errors.curp
+                displayFieldError("curp")
                   ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                   : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
               } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
@@ -449,9 +498,10 @@ function RegisterFormStep({ disabled }) {
               onChange={formChange}
               onBlur={() => markTouched("curp")}
               placeholder="GOMC960912HDFRRL04"
+              aria-invalid={!!displayFieldError("curp")}
             />
-            {touched.curp && errors.curp && (
-              <div className="text-xs text-red-600 mt-1">{errors.curp}</div>
+            {displayFieldError("curp") && (
+              <div className="text-xs text-red-600 mt-1">{displayFieldError("curp")}</div>
             )}
           </div>
           <div className="flex-1">
@@ -460,7 +510,7 @@ function RegisterFormStep({ disabled }) {
             </label>
             <input
               className={`block w-full rounded-lg border px-3 py-3 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 transition ${
-                touched.rfc && errors.rfc
+                displayFieldError("rfc")
                   ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                   : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
               } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
@@ -474,9 +524,10 @@ function RegisterFormStep({ disabled }) {
               onChange={formChange}
               onBlur={() => markTouched("rfc")}
               placeholder="GOMC960912QX2"
+              aria-invalid={!!displayFieldError("rfc")}
             />
-            {touched.rfc && errors.rfc && (
-              <div className="text-xs text-red-600 mt-1">{errors.rfc}</div>
+            {displayFieldError("rfc") && (
+              <div className="text-xs text-red-600 mt-1">{displayFieldError("rfc")}</div>
             )}
           </div>
         </div>
@@ -488,7 +539,7 @@ function RegisterFormStep({ disabled }) {
             <div className="relative flex items-center">
               <input
                 className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition pr-10 ${
-                  touched.password && errors.password
+                  displayFieldError("password")
                     ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                     : passwordValid && form.password
                     ? "border-emerald-400 dark:border-emerald-400 focus:ring-emerald-400"
@@ -503,6 +554,7 @@ function RegisterFormStep({ disabled }) {
                 onChange={formChange}
                 onBlur={() => markTouched("password")}
                 placeholder="••••••••"
+                aria-invalid={!!displayFieldError("password")}
               />
               <button
                 type="button"
@@ -537,8 +589,8 @@ function RegisterFormStep({ disabled }) {
                 )}
               </div>
             </div>
-            {touched.password && errors.password && (
-              <div className="text-xs text-red-600 mt-1">{errors.password}</div>
+            {displayFieldError("password") && (
+              <div className="text-xs text-red-600 mt-1">{displayFieldError("password")}</div>
             )}
           </div>
           <div className="flex-1">
@@ -548,7 +600,7 @@ function RegisterFormStep({ disabled }) {
             <div className="relative flex items-center">
               <input
                 className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition pr-10 ${
-                  touched.password2 && errors.password2
+                  displayFieldError("password2")
                     ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                     : passwordsMatch && form.password2
                     ? "border-emerald-400 dark:border-emerald-400 focus:ring-emerald-400"
@@ -563,6 +615,7 @@ function RegisterFormStep({ disabled }) {
                 onChange={formChange}
                 onBlur={() => markTouched("password2")}
                 placeholder="••••••••"
+                aria-invalid={!!displayFieldError("password2")}
               />
               <button
                 type="button"
@@ -596,8 +649,8 @@ function RegisterFormStep({ disabled }) {
                 </span>
               )}
             </div>
-            {touched.password2 && errors.password2 && (
-              <div className="text-xs text-red-600 mt-1">{errors.password2}</div>
+            {displayFieldError("password2") && (
+              <div className="text-xs text-red-600 mt-1">{displayFieldError("password2")}</div>
             )}
           </div>
         </div>
@@ -608,11 +661,6 @@ function RegisterFormStep({ disabled }) {
         >
           {loading ? "Registrando..." : "Registrarme"}
         </button>
-        {(error || serverError) && (
-          <div className="w-full mt-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 font-semibold text-center">
-            {error || serverError}
-          </div>
-        )}
         {success && (
           <div className="w-full mt-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-teal-800 font-semibold text-center">
             {success}
