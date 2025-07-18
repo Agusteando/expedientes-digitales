@@ -121,6 +121,13 @@ export default function Login() {
           }
         </form>
         <div className="w-full text-right pt-3 text-xs text-slate-600 dark:text-slate-400">
+          <a
+            href="/forgot-password"
+            className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-emerald-600 transition"
+          >
+            ¿Olvidaste tu contraseña?
+          </a>
+          <br />
           ¿Aún no tienes cuenta?{" "}
           <a href="/register" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-emerald-600 transition">Regístrate aquí</a>
         </div>
