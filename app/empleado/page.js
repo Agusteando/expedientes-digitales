@@ -26,19 +26,16 @@ export default function Login() {
     setSuccess(null);
 
     try {
-      // Use proper provider id "login"
       const result = await signIn("login", {
         redirect: false,
         email: form.email,
         password: form.password,
-        // If needed, stay on /empleado on error
         callbackUrl: "/expediente"
       });
 
       setPending(false);
 
       if (!result.ok) {
-        // NextAuth 4 returns .error if thrown on authorize
         setError(result.error || "Usuario o contraseña incorrectos.");
         return;
       }
@@ -50,7 +47,6 @@ export default function Login() {
       setPending(false);
       setError("No se pudo contactar el servidor.");
       if (typeof window !== "undefined") {
-        // Defensive logging for bad NextAuth client error
         // eslint-disable-next-line no-console
         console.error("[EMP LOGIN SUBMIT]", err);
       }
@@ -125,6 +121,10 @@ export default function Login() {
           }
         </form>
         <div className="w-full text-right pt-3 text-xs text-slate-600 dark:text-slate-400">
+          <a href="/forgot-password" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-emerald-600 transition">
+            ¿Olvidaste tu contraseña?
+          </a>
+          <br />
           ¿Aún no tienes cuenta?{" "}
           <a href="/register" className="text-cyan-700 dark:text-cyan-300 underline font-bold hover:text-emerald-600 transition">Regístrate aquí</a>
         </div>

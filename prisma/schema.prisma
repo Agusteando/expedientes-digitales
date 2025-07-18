@@ -61,6 +61,17 @@ model User {
   checklistItems ChecklistItem[]
   signatures     Signature[]
   plantelesAdmin Plantel[]       @relation("PlantelAdmins")
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
+  used       Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 model Document {
