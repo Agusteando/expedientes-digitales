@@ -239,7 +239,13 @@ function validatePassword(password) {
   return !!password && password.length >= 7;
 }
 
-// Registration Form Step
+// --- CURP Regex updated here (frontend) ---
+function validCurp(curp) {
+  // Accepts e.g. SASN040606MMCNNTA8 and pre/post 2000 valid CURPs
+  const regex = /^[A-Z]{4}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[0-9A]\d$/i;
+  return regex.test(curp ?? "");
+}
+
 function RegisterFormStep({ disabled }) {
   const [form, setForm] = useState({
     name: "",
@@ -249,7 +255,6 @@ function RegisterFormStep({ disabled }) {
     curp: "",
     rfc: ""
   });
-  // Separate error states for: local-validation errors, API-field errors, top-level error
   const [fieldErrors, setFieldErrors] = useState({});
   const [serverTopError, setServerTopError] = useState("");
   const [success, setSuccess] = useState("");
@@ -258,11 +263,9 @@ function RegisterFormStep({ disabled }) {
   const [showPassword2, setShowPassword2] = useState(false);
 
   const router = useRouter();
-
   const [touched, setTouched] = useState({});
   const markTouched = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
 
-  // LOCAL FIELD VALIDATION
   function fieldError(field, value = undefined) {
     const val = value !== undefined ? value : form[field];
     switch (field) {
@@ -277,8 +280,7 @@ function RegisterFormStep({ disabled }) {
       case "curp":
         if (!val) return "El CURP es obligatorio.";
         if (val.length !== 18) return "El CURP debe tener exactamente 18 caracteres.";
-        if (!/^[A-Z]{4}\d{6}[A-Z]{6}\d{2}$/.test((val || "").toUpperCase()))
-          return "El CURP no tiene un formato válido.";
+        if (!validCurp(val || "")) return "El CURP no tiene un formato válido. Ejemplo: GOMC960912HDFRRL04 o SASN040606MMCNNTA8";
         return "";
       case "rfc":
         if (!val) return "El RFC es obligatorio.";
@@ -300,7 +302,6 @@ function RegisterFormStep({ disabled }) {
     }
   }
 
-  // Build errors object for client side
   const localFieldErrors = {
     name: fieldError("name"),
     email: fieldError("email"),
@@ -309,19 +310,14 @@ function RegisterFormStep({ disabled }) {
     password: fieldError("password"),
     password2: fieldError("password2"),
   };
-
-  // Compose display error for field: API error > client validation
   function displayFieldError(field) {
-    // If server returned this error, show it (most important), otherwise show local validation error if touched
     if (fieldErrors && fieldErrors[field]) return fieldErrors[field];
     if (touched[field] && localFieldErrors[field]) return localFieldErrors[field];
     return "";
   }
-
   function formChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
     setServerTopError("");
-    // Remove API error for this field as user edits (to force revalidation/fresh state)
     setFieldErrors(errors => ({ ...errors, [e.target.name]: undefined }));
   }
 
@@ -337,10 +333,8 @@ function RegisterFormStep({ disabled }) {
       curp: true,
       rfc: true,
     });
-    // Find first error
     const firstErrorField = Object.keys(localFieldErrors).find((key) => localFieldErrors[key]);
     if (firstErrorField) {
-      // Show immediate error visually under field, remove stale API errors
       setFieldErrors({});
       setServerTopError(localFieldErrors[firstErrorField] || "Por favor corrige los errores.");
       return;
@@ -362,9 +356,7 @@ function RegisterFormStep({ disabled }) {
       const data = await res.json();
       if (!res.ok) {
         if (data && data.errors) {
-          // Set each field error (show at field level)
           setFieldErrors(data.errors);
-          // If any general or multiple errors, show a summary at top with priority: either first field error, or a count
           const errorSummary =
             Object.values(data.errors).length === 1
               ? Object.values(data.errors)[0]
@@ -388,7 +380,6 @@ function RegisterFormStep({ disabled }) {
     }
   }
 
-  // Password requirement UI
   const passwordReq =
     "La contraseña debe tener al menos 7 caracteres. Puede contener letras, números, signos o símbolos.";
 
@@ -680,11 +671,12 @@ function RegisterFormStep({ disabled }) {
   );
 }
 
-// Main Stepper Component
-export default function RegisterStepper() {
-  const [step, setStep] = useState(0); // 0 = privacy, 1 = register
+// PrivacyStep and RegisterStepper remain unchanged ([...])
+// --- re-include previous PrivacyStep/Stepper components here, omitted for brevity ---
 
-  // Stepper Controls UI
+export default function RegisterStepper() {
+  const [step, setStep] = useState(0);
+
   function StepHeader() {
     return (
       <div className="flex justify-center gap-6 items-center mb-8">
