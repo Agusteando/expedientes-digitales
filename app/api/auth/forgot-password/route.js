@@ -1,79 +1,74 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { nanoid } from "nanoid";
 import { sendResetPasswordEmail } from "@/lib/gmail";
 
-// POST { email }
+/**
+ * Handle forgot-password POST: create token, store, send email.
+ * Always respond truthfully: on backend error, return error code and never success.
+ */
 export async function POST(req) {
-  let data, email;
+  let data;
   try {
     data = await req.json();
-    email = (data.email || "").trim().toLowerCase();
   } catch {
+    return NextResponse.json({ error: "Petición inválida." }, { status: 400 });
+  }
+
+  const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+  if (!email) {
+    return NextResponse.json({ error: "Correo electrónico requerido." }, { status: 400 });
+  }
+
+  // Always return generic response except for server errors.
+  // Don't reveal user existence for security, but handle backend/email failures safely.
+  let user;
+  try {
+    user = await prisma.user.findUnique({ where: { email } });
+  } catch (e) {
+    console.error("[FORGOT PASSWORD PRISMA ERROR]", e);
+    return NextResponse.json({ error: "Error del servidor. Intenta más tarde." }, { status: 500 });
+  }
+
+  // If user not found, do NOT indicate it (avoid account enumeration)—simulate success, but skip send:
+  if (!user || !user.isActive) {
+    // Return success but do not attempt to send email or store token.
     return NextResponse.json({ ok: true }, { status: 200 });
   }
-  if (!email || typeof email !== "string" || email.length < 5) {
-    return NextResponse.json({ ok: true }, { status: 200 });
+
+  // Generate a token, store, attempt email. Ensure all errors are explicit and cause a non-200.
+  const crypto = await import("crypto");
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const token = rawToken;
+  const expires = new Date(Date.now() + 1000 * 60 * 30); // 30 minutes
+
+  // Delete any previous tokens for this user, then create a new one.
+  try {
+    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: expires
+      }
+    });
+  } catch (err) {
+    console.error("[FORGOT PASSWORD TOKEN CREATE ERROR]", err);
+    return NextResponse.json({ error: "No se pudo generar el enlace, intenta más tarde." }, { status: 500 });
   }
 
-  // Find user (must be empleado/candidato, is active)
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      name: true,
-      isActive: true,
-      role: true,
-      email: true,
-    },
-  });
-
-  // Always reply generically to avoid enumeration
-  if (!user || !user.isActive || !["employee", "candidate"].includes(user.role)) {
-    return NextResponse.json({ ok: true }, { status: 200 });
-  }
-
-  // ===== DEBUG LOGS: check Prisma client model keys =====
-  // Remove after confirming fix!
-  if (typeof prisma.passwordResetToken === "undefined") {
-    // eslint-disable-next-line no-console
-    console.error("[PRISMA] prisma.passwordResetToken is undefined. Available keys:", Object.keys(prisma));
-    return NextResponse.json({ ok: false, error: "Server error: passwordResetToken model missing. Did you run migrations?" }, { status: 500 });
-  }
-
-  // Invalidate previous tokens for this user
-  await prisma.passwordResetToken.updateMany({
-    where: { userId: user.id, used: false, expiresAt: { gt: new Date() } },
-    data: { used: true },
-  });
-
-  // Create new token (random, 40 chars)
-  const token = nanoid(40);
-  const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-  await prisma.passwordResetToken.create({
-    data: {
-      userId: user.id,
-      token,
-      expiresAt: expires,
-    },
-  });
-
-  // Send reset email
-  const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://www.casitaiedis.edu.mx"}/reset-password/${token}`;
+  // Construct a reset link for the email.
+  const origin = req.headers.get("origin") || process.env.NEXTAUTH_URL || "https://iecs-iedis.com";
+  const resetLink = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 
   try {
-    await sendResetPasswordEmail({
-      to: user.email,
-      name: user.name,
-      link: resetUrl,
-    });
-  } catch (e) {
-    // Optionally, log error for support
-    // eslint-disable-next-line no-console
-    console.error("[FORGOT PASSWORD EMAIL ERROR]", e);
+    await sendResetPasswordEmail(user.email, resetLink);
+  } catch (err) {
+    // Email error—likely not user's fault!
+    console.error("[FORGOT PASSWORD EMAIL ERROR]", err);
+    return NextResponse.json({ error: "No se pudo enviar el correo de recuperación. Intenta después o contacta soporte." }, { status: 500 });
   }
-  // Always reply generically
+
+  // If all succeeded, send ok:true
   return NextResponse.json({ ok: true }, { status: 200 });
 }
