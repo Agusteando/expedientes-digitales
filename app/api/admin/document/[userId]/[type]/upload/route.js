@@ -6,7 +6,7 @@ import { writeFileToPublicUploads } from "@/lib/file-upload-utils";
 
 export const config = { api: { bodyParser: false } };
 
-const ALLOWED_TYPES = ["reglamento", "contrato"];
+const ALLOWED_TYPES = ["proyectivos"];
 
 export async function POST(req, context) {
   const params = await context.params;
@@ -35,12 +35,11 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Solo admins del plantel pueden subir el archivo" }, { status: 403 });
   }
 
-  // Parse multipart, save file
   const formData = await req.formData();
   const file = formData.get("file");
   if (!file || typeof file === "string") return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
 
-  const { url, metadata } = await writeFileToPublicUploads(file, {
+  const { url } = await writeFileToPublicUploads(file, {
     userId,
     docType: type,
     adminUpload: true
@@ -53,12 +52,11 @@ export async function POST(req, context) {
       type,
       status: "ACCEPTED",
       filePath: url,
-      reviewComment: "Archivo subido por administradora de plantel tras firma presencial.",
+      reviewComment: "Archivo de Proyectivos cargado por administradora del plantel.",
       version: 1,
     }
   });
 
-  // Upsert ChecklistItem as fulfilled
   await prisma.checklistItem.upsert({
     where: {
       userId_type: { userId: Number(userId), type }

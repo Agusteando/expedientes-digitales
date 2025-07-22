@@ -11,8 +11,7 @@ import {
   ArrowUpTrayIcon,
   ArrowDownTrayIcon,
   XMarkIcon,
-  BookOpenIcon,
-  PencilSquareIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "../stepMetaExpediente";
 
@@ -31,20 +30,13 @@ function formatDateDisplay(date) {
 }
 
 const ADMIN_UPLOAD_TYPES = {
-  reglamento: {
-    label: "Documento de Reglamento firmado presencialmente",
-    icon: BookOpenIcon,
-    color: "fuchsia",
-    accent: "bg-fuchsia-50 border-fuchsia-300",
-    chip: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200"
-  },
-  contrato: {
-    label: "Contrato laboral firmado presencialmente",
-    icon: PencilSquareIcon,
-    color: "purple",
-    accent: "bg-purple-50 border-purple-300",
-    chip: "bg-purple-100 text-purple-700 border-purple-200"
-  },
+  proyectivos: {
+    label: "Proyectivos entregados presencialmente",
+    icon: DocumentTextIcon,
+    color: "emerald",
+    accent: "bg-emerald-50 border-emerald-300",
+    chip: "bg-emerald-100 text-emerald-700 border-emerald-200"
+  }
 };
 
 function checklistLabel(type) {
@@ -61,8 +53,7 @@ function checklistLabel(type) {
     carta_recomendacion: "Cartas recomendación",
     curriculum_vitae: "Currículum",
     carta_no_penales: "Carta no penales",
-    reglamento: "Reglamento (firmado)",
-    contrato: "Contrato (firmado)",
+    proyectivos: "Proyectivos",
   };
   return map[type] || type.replace(/_/g, " ");
 }
@@ -71,7 +62,6 @@ function checklistIcon(status) {
     status === true ||
     status === "accepted" ||
     status === "fulfilled" ||
-    status === "signed" ||
     status === "completed"
   )
     return <CheckCircleIcon className="w-5 h-5 text-emerald-500" />;
@@ -117,7 +107,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const [docs, setDocs] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [pending, setPending] = useState({}); // pending.reglamento or contrato File | undefined
+  const [pending, setPending] = useState({});
   const [uploading, setUploading] = useState({});
   const [uploadSuccess, setUploadSuccess] = useState({});
   const [uploadError, setUploadError] = useState({});
@@ -172,7 +162,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const checklistRequired = stepsAll.filter(s => !s.signable && !s.adminUploadOnly).map(s => s.key);
   const adminUploadKeys = Object.keys(ADMIN_UPLOAD_TYPES);
   const fulfilledCount =
-    checklistRequired.reduce((s, k) => (checklistByType[k]?.fulfilled ? s+1 : s), 0) +
+    checklistRequired.reduce((s, k) => (checklistByType[k]?.fulfilled ? s+1:s), 0) +
     adminUploadKeys.reduce((s,k)=> docsByType[k]?s+1:s,0);
   const totalRequired = checklistRequired.length + adminUploadKeys.length;
   const progressPct = totalRequired ? Math.round(fulfilledCount/totalRequired*100) : 0;
@@ -204,7 +194,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
           </div>
         </div>
 
-        {/* Upload/replace cards! */}
+        {/* Admin-only 'proyectivos' upload: no signature logic */}
         <div className="px-5 pt-6 pb-2 flex flex-col gap-4">
           {Object.entries(ADMIN_UPLOAD_TYPES).map(([key, meta]) => {
             const doc = docsByType[key];
@@ -232,7 +222,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     </div>
                   </div>
                 )}
-                {/* --- dropzone and button always visible --- */}
                 <UploadDropzone
                   onFile={file => { setPending(f=>({...f, [key]:file})); setUploadError(e=>({...e,[key]:""})); setUploadSuccess(s=>({...s,[key]:""})); }}
                   accept="application/pdf,image/*"
@@ -265,7 +254,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
 
         {/* Progress bar and checklist */}
         <div className="px-5 pt-5 pb-5">
-          {/* Progress summary */}
           <div className="mb-2 font-bold text-black mt-1 text-base">Resumen del expediente</div>
           <div className="flex items-center gap-3 mb-5">
             <span className="text-xs font-bold text-cyan-800">
@@ -288,12 +276,11 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             <span className="text-xs font-mono font-bold text-slate-500">{progressPct}%</span>
           </div>
 
-          {/* Checklist */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             {stepsAll.map(st => {
               if (adminUploadKeys.includes(st.key) && !docsByType[st.key]) return null;
               if (adminUploadKeys.includes(st.key) && docsByType[st.key]) {
-                // Prominent card for uploaded reg/contract
+                // Prominent card for uploaded
                 const meta = ADMIN_UPLOAD_TYPES[st.key];
                 const doc = docsByType[st.key];
                 return (
@@ -313,10 +300,10 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                       className="flex items-center gap-2 border border-cyan-200 px-3 py-1 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs w-fit"
                     >
                       <ArrowDownTrayIcon className="w-4 h-4" />
-                      Descargar documento firmado
+                      Descargar documento
                     </a>
                     <span className={`inline-flex items-center gap-1 text-xs font-bold mt-1 px-2 py-0.5 rounded-full border ${meta.chip}`}>
-                      <CheckCircleIcon className="w-4 h-4" /> Firmado y entregado
+                      <CheckCircleIcon className="w-4 h-4" /> Entregado
                     </span>
                     <span className="text-xs text-slate-500 mt-1">
                       Subido el {formatDateDisplay(doc.uploadedAt)}
@@ -347,7 +334,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             })}
           </div>
 
-          {/* Uploaded files list */}
           <div className="mb-2 font-bold text-black mt-3 text-base flex items-center gap-2">
             <CloudArrowDownIcon className="w-6 h-6 text-cyan-600 inline" />
             Archivos subidos

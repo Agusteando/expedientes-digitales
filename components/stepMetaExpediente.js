@@ -81,18 +81,12 @@ export const stepsExpediente = [
     label: "Carta de No Penales",
     description: "Sube tu carta de antecedentes no penales emitida por la autoridad.",
   },
+  // Admin-only document (no signing, just upload)
   {
-    key: "reglamento",
-    iconKey: "BookOpenIcon",
-    label: "Firma de Reglamento",
-    description: "Una vez revisado el reglamento institucional, concluye tu proceso firmado de manera presencial.",
-    adminUploadOnly: true
-  },
-  {
-    key: "contrato",
-    iconKey: "PencilSquareIcon",
-    label: "Firma de Contrato Laboral",
-    description: "Tu contrato laboral se firma presencialmente en tu Plantel.",
-    adminUploadOnly: true
+    key: "proyectivos",
+    iconKey: "DocumentTextIcon",
+    label: "Entrega de Proyectivos",
+    description: "Adjunta el archivo de proyectivos entregado presencialmente.",
+    adminUploadOnly: true,
   },
 ];

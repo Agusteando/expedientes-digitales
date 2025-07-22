@@ -24,12 +24,12 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "El candidato ya ha sido aprobado." }, { status: 409 });
   }
 
-  // Check contract signature
-  const contratoSig = await prisma.signature.findFirst({
-    where: { userId, type: "contrato", status: { in: ["signed", "completed"] } }
+  // Check admin-uploaded Proyectivos doc
+  const proyectivosDoc = await prisma.document.findFirst({
+    where: { userId, type: "proyectivos", status: "ACCEPTED" }
   });
-  if (!contratoSig) {
-    return NextResponse.json({ error: "Candidato debe firmar el contrato antes de aprobar." }, { status: 400 });
+  if (!proyectivosDoc) {
+    return NextResponse.json({ error: "Debe entregar Proyectivos firmados antes de aprobar." }, { status: 400 });
   }
 
   const updated = await prisma.user.update({
