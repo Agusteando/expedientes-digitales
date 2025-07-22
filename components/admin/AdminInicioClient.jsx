@@ -3,27 +3,31 @@
 import { useState } from "react";
 import AdminSidebar, { AdminMobileSidebarToggle } from "@/components/admin/AdminSidebar";
 
-const NAVBAR_HEIGHT = 68; // px
-
+/**
+ * Flex row: sidebar + main
+ * No parent uses overflow-x-hidden/auto/scroll, so sticky works.
+ * Sidebar is always sibling (not child) of <main>.
+ */
 export default function AdminInicioClient({
   children,
   showSidebar
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Layout: NAVBAR (fixed elsewhere), then below it a flex row (sidebar + main)
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe]">
-      <div className="flex flex-row w-full min-h-screen pt-[68px] md:pt-[72px]">
+      {/* Fixed navbar height is assumed 68px. Adjust pt if your navbar changes. */}
+      <div className="flex min-h-screen w-full pt-[68px]">
         {showSidebar && (
           <>
             <AdminSidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
             <AdminMobileSidebarToggle onClick={() => setMobileOpen(true)} />
           </>
         )}
-        <div className="flex-1 flex flex-col w-full min-w-0 max-w-full">
+        {/* Main content: grows, doesn't wrap, can't cause overflow */}
+        <main className="flex-1 w-full min-w-0 max-w-full flex flex-col">
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );
