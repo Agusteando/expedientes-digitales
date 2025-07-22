@@ -98,58 +98,63 @@ export default function AdminNav({ session }) {
     setSwitching(false);
   }
 
-  // --- Only superadmin ever sees impersonate/switch controls OR impersonation banner
+  // --- Impersonation banner shown at ALL times when session is an impersonated admin ---
+  const impersonationBanner = isImpersonated && (
+    <div className="fixed z-[9999] top-0 left-0 w-full bg-yellow-100 text-yellow-900 text-center py-2 px-4 flex items-center justify-center gap-3 font-bold text-xs shadow border-b-2 border-yellow-300 animate-fade-in">
+      Estás impersonificando a un administrador ({session.email}, {session.name}). &nbsp;
+      <button
+        className="px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm"
+        onClick={() => handleSwitchImpersonation("superadmin")}
+        disabled={switching}
+        type="button"
+      >
+        Dejar de impersonificar
+      </button>
+    </div>
+  );
+
+  // Only superadmin ever sees impersonate/switch controls OR impersonation banner
   if (session.role !== "superadmin") return (
-    <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30">
-      <a href="/admin/inicio" className="flex items-center gap-2">
-        <span className="flex items-center">
+    <>
+      {impersonationBanner}
+      <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30" style={{marginTop: isImpersonated ? 48 : 0}}>
+        <a href="/admin/inicio" className="flex items-center gap-2">
+          <span className="flex items-center">
+            <Image
+              src="/signia.png"
+              alt="IECS-IEDIS"
+              width={120}
+              height={40}
+              className="object-contain rounded bg-white shadow-sm"
+              priority
+            />
+          </span>
+        </a>
+        <div className="flex items-center gap-3">
+          <span className="text-xs sm:text-sm text-slate-700 font-semibold">{session.name}</span>
           <Image
-            src="/signia.png"
-            alt="IECS-IEDIS"
-            width={120}
-            height={40}
-            className="object-contain rounded bg-white shadow-sm"
-            priority
+            alt="profile"
+            src={session.picture || "/IMAGOTIPO-IECS-IEDIS.png"}
+            width={32}
+            height={32}
+            className="rounded-full bg-slate-100"
           />
-        </span>
-      </a>
-      <div className="flex items-center gap-3">
-        <span className="text-xs sm:text-sm text-slate-700 font-semibold">{session.name}</span>
-        <Image
-          alt="profile"
-          src={session.picture || "/IMAGOTIPO-IECS-IEDIS.png"}
-          width={32}
-          height={32}
-          className="rounded-full bg-slate-100"
-        />
-        <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
-            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-full text-xs shadow"
-            title="Cerrar sesión"
-          >Cerrar sesión</button>
-        </form>
-      </div>
-    </nav>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-full text-xs shadow"
+              title="Cerrar sesión"
+            >Cerrar sesión</button>
+          </form>
+        </div>
+      </nav>
+    </>
   );
 
   // --- SUPERADMIN NAV ---
   return (
     <>
-      {/* Impersonation banner (only for superadmin while impersonating) */}
-      {isImpersonated && (
-        <div className="fixed z-[9999] top-0 left-0 w-full bg-yellow-100 text-yellow-900 text-center py-2 px-4 flex items-center justify-center gap-3 font-bold text-xs shadow border-b-2 border-yellow-300 animate-fade-in">
-          Estás impersonificando a un administrador ({session.email}, {session.name}). &nbsp;
-          <button
-            className="px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm"
-            onClick={() => handleSwitchImpersonation("superadmin")}
-            disabled={switching}
-            type="button"
-          >
-            Dejar de impersonificar
-          </button>
-        </div>
-      )}
+      {impersonationBanner}
       <nav className="w-full flex items-center justify-between px-6 py-3 bg-white/95 shadow border-b border-purple-100 fixed top-0 left-0 z-30" style={{marginTop: isImpersonated ? 48 : 0}}>
         <a href="/admin/inicio" className="flex items-center gap-2">
           <span className="flex items-center">
