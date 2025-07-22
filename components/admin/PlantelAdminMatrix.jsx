@@ -34,7 +34,6 @@ export default function PlantelAdminMatrix({ planteles, admins }) {
   const [error, setError] = useState({});
   const [allLoaded, setAllLoaded] = useState(false);
 
-  // Fetch all plantel user progress data on mount!
   useEffect(() => {
     async function fetchAllPlanteles() {
       setAllLoaded(false);
@@ -105,9 +104,7 @@ export default function PlantelAdminMatrix({ planteles, admins }) {
   );
 }
 
-// Top bar with progress (SaaS style)
 function PlantelSummaryBar({ users = [], loading }) {
-  // Count only active users (isActive: true)
   const activeUsers = (users || []).filter(u => !!u.isActive);
   if (loading === true || !Array.isArray(users)) {
     return <span className="text-[13px] font-mono text-slate-400 ml-6 animate-pulse">Cargando...</span>;
@@ -132,20 +129,19 @@ function PlantelSummaryBar({ users = [], loading }) {
   );
 }
 
-// Table for all users in a plantel (SaaS, mobile first)
 function PlantelEmployeeProgressTable({ users }) {
   return (
-    <div className="overflow-x-auto mb-3">
+    <div className="overflow-x-auto mb-3 max-w-full">
       <table className="min-w-full table-auto border text-xs xs:text-sm rounded-lg">
         <thead>
           <tr className="bg-cyan-50 border-b border-cyan-100">
-            <th className="px-2 py-2">Usuario</th>
-            <th className="px-2 py-2">Rol</th>
-            <th className="px-2 py-2">Ficha técnica</th>
-            <th className="px-2 py-2">Expediente</th>
-            <th className="px-2 py-2">Reglamento</th>
-            <th className="px-2 py-2">Contrato</th>
-            <th className="px-2 py-2">Acciones</th>
+            <th className="sticky top-0 left-0 z-20 bg-white/95 px-2 py-2">Usuario</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Rol</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Ficha técnica</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Expediente</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Reglamento</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Contrato</th>
+            <th className="sticky top-0 z-10 bg-white/95 px-2 py-2">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -159,7 +155,7 @@ function PlantelEmployeeProgressTable({ users }) {
             const cp = checklistProgress(u);
             return (
               <tr key={u.id} className="border-b">
-                <td className="flex flex-row gap-2 items-center px-2 py-2 min-w-[160px]">
+                <td className="sticky left-0 bg-white z-10 flex flex-row gap-2 items-center px-2 py-2 min-w-[160px]">
                   <Image src={u.picture || "/IMAGOTIPO-IECS-IEDIS.png"} width={32} height={32} alt="" className="rounded-full bg-white border border-cyan-100" />
                   <div>
                     <div className="font-semibold text-cyan-900">{u.name}</div>
