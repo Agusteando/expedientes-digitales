@@ -1,11 +1,13 @@
 
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import UserManagementTable from "./UserManagementTable";
 import BulkActionBar from "./BulkActionBar";
 import UserDocsDrawer from "./UserDocsDrawer";
 import UserFichaTecnicaDrawer from "./UserFichaTecnicaDrawer";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, XCircleIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export default function UserManagementPanel({
   users,
@@ -14,12 +16,6 @@ export default function UserManagementPanel({
   plantelesPermittedIds,
   canAssignPlantel
 }) {
-  const isSuperadmin = adminRole === "superadmin";
-  const isAdmin = adminRole === "admin";
-  const permittedPlanteles = isSuperadmin ? planteles : planteles.filter(p => plantelesPermittedIds?.includes(p.id));
-  const administratorsPlanteles = permittedPlanteles.map(p => p.id);
-
-  // State (move to top, before any useMemo)
   const [filter, setFilter] = useState("");
   const [plantelFilter, setPlantelFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -30,10 +26,21 @@ export default function UserManagementPanel({
   const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
   const [feedback, setFeedback] = useState({ type: null, message: "" });
 
-  // Restrict users for admin ONLY TO THEIR PLANTEL
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  const adminsPlanteles = adminRole === "superadmin"
+    ? planteles.map(p => p.id)
+    : plantelesPermittedIds || [];
+
+  const editablePlanteles = planteles.filter(p => adminsPlanteles.includes(p.id));
+
+  // Reset page on filter change
+  useEffect(() => { setPage(1); }, [filter, plantelFilter, roleFilter, statusFilter, activeFilter, users.length]);
+
   const usersFiltered = useMemo(() => {
     return (users || [])
-      .filter(u => isSuperadmin || (isAdmin && administratorsPlanteles.includes(u.plantelId)))
       .filter(u =>
         (!filter || (
           String(u.name || "").toLowerCase().includes(filter.toLowerCase()) ||
@@ -47,25 +54,34 @@ export default function UserManagementPanel({
          (statusFilter === "incomplete" && !u.readyForApproval && u.role === "candidate")) &&
         (activeFilter === "todos" || (activeFilter === "activos" ? u.isActive : !u.isActive))
       );
-  }, [
-    users, isSuperadmin, isAdmin, administratorsPlanteles,
-    filter, plantelFilter, roleFilter, statusFilter, activeFilter
-  ]);
+  }, [users, filter, plantelFilter, roleFilter, statusFilter, activeFilter]);
+  const totalPages = Math.max(1, Math.ceil(usersFiltered.length / pageSize));
+  const paginatedUsers = useMemo(
+    () => usersFiltered.slice((page - 1) * pageSize, page * pageSize),
+    [usersFiltered, page, pageSize]
+  );
 
   const selectedUserIds = useMemo(
-    () => Object.entries(selection).filter(([k, v]) => v).map(([k]) => Number(k)),
+    () => Object.entries(selection).filter(([k,v]) => v).map(([k]) => Number(k)),
     [selection]
   );
-  const allSelected = usersFiltered.length > 0 && selectedUserIds.length === usersFiltered.length;
+  const allSelected = paginatedUsers.length > 0 && selectedUserIds.length >= paginatedUsers.length;
 
   function handleSelectUser(userId, on) {
     setSelection(sel => ({ ...sel, [userId]: on }));
   }
   function handleSelectAll(on) {
     if (on)
-      setSelection(Object.fromEntries(usersFiltered.map(u => [u.id, true])));
+      setSelection(sel => ({
+        ...sel,
+        ...Object.fromEntries(paginatedUsers.map(u => [u.id, true]))
+      }));
     else
-      setSelection({});
+      setSelection(sel => {
+        const ns = { ...sel };
+        paginatedUsers.forEach(u => { delete ns[u.id]; });
+        return ns;
+      });
   }
   async function handleAssignPlantel(userId, plantelId) {
     setFeedback({ type: "info", message: "Asignando..." });
@@ -113,6 +129,7 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
+  // Receive eligible IDs (from BulkActionBar)
   async function handleBulkApprove(eligibleUserIds) {
     if (!eligibleUserIds || !eligibleUserIds.length) {
       setFeedback({ type: "error", message: "Ningún usuario seleccionado cumple requisitos." });
@@ -134,6 +151,7 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
+  // Activate/deactivate single
   async function handleSetActive(userId, isActive) {
     setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
     try {
@@ -151,6 +169,7 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
+  // Bulk activate/deactivate
   async function handleBulkSetActive(isActive) {
     setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
     for (let userId of selectedUserIds) {
@@ -161,8 +180,8 @@ export default function UserManagementPanel({
     window.location.reload();
   }
 
+  // User delete
   async function handleDelete(userId) {
-    if (!isSuperadmin) return;
     setFeedback({ type: "info", message: "Eliminando usuario..." });
     try {
       const res = await fetch(`/api/admin/user/${userId}/delete`, {
@@ -183,8 +202,51 @@ export default function UserManagementPanel({
   function handleOpenFichaTecnica(user) { setFichaDrawer({ open: true, user }); }
   function closeFichaDrawer() { setFichaDrawer({ open: false, user: null }); }
 
+  // Pagination controls (mobile-first, sticky)
+  function PaginationBar() {
+    return (
+      <div className="w-full flex flex-wrap flex-row gap-2 justify-between items-center mt-1 mb-4 px-1 text-xs">
+        <div>
+          <span className="font-semibold mr-3">
+            Página {page} / {totalPages} ({usersFiltered.length} usuario{usersFiltered.length === 1 ? "" : "s"})
+          </span>
+          <span>
+            Filas por página:&nbsp;
+            <select
+              className="border border-cyan-200 rounded px-1 py-0.5"
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            >
+              {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </span>
+        </div>
+        <div className="flex gap-1">
+          <button
+            className="px-3 py-1 rounded font-bold bg-cyan-50 border border-cyan-200 hover:bg-cyan-200 text-cyan-900 cursor-pointer disabled:opacity-60"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            tabIndex={0}
+            aria-label="Página anterior"
+          >
+            <ChevronLeftIcon className="w-5 h-5 inline mb-0.5" />
+          </button>
+          <button
+            className="px-3 py-1 rounded font-bold bg-cyan-50 border border-cyan-200 hover:bg-cyan-200 text-cyan-900 cursor-pointer disabled:opacity-60"
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+            tabIndex={0}
+            aria-label="Página siguiente"
+          >
+            <ChevronRightIcon className="w-5 h-5 inline mb-0.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-8">
+    <section id="user-management" className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-8">
       <header className="mb-4">
         <h2 className="text-xl font-bold text-cyan-900 mb-1">Asignar empleados y candidatos a plantel</h2>
         <div className="flex flex-wrap items-center gap-3 mt-2 mb-1 text-sm">
@@ -201,7 +263,7 @@ export default function UserManagementPanel({
             onChange={e => setPlantelFilter(e.target.value)}
           >
             <option value="">Plantel (todos)</option>
-            {permittedPlanteles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {planteles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select
             className="border border-cyan-200 rounded px-2 py-1 text-sm"
@@ -240,15 +302,16 @@ export default function UserManagementPanel({
           </div>
         )}
       </header>
+      <PaginationBar />
       <UserManagementTable
-        users={usersFiltered}
-        planteles={permittedPlanteles}
-        adminsPlanteles={administratorsPlanteles}
+        users={paginatedUsers}
+        planteles={planteles}
+        adminsPlanteles={adminsPlanteles}
         role={adminRole}
         selection={selection}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
-        canAssignPlantel={canAssignPlantel && isSuperadmin}
+        canAssignPlantel={canAssignPlantel}
         onSelectUser={handleSelectUser}
         onSelectAll={handleSelectAll}
         onAssignPlantel={handleAssignPlantel}
@@ -256,15 +319,16 @@ export default function UserManagementPanel({
         onDocs={handleOpenDocs}
         onFichaTecnica={handleOpenFichaTecnica}
         onSetActive={handleSetActive}
-        onDelete={isSuperadmin ? handleDelete : undefined}
+        onDelete={handleDelete}
       />
+      <PaginationBar />
       <BulkActionBar
-        users={usersFiltered}
-        planteles={permittedPlanteles}
+        users={paginatedUsers}
+        planteles={planteles}
         adminRole={adminRole}
         selectedUserIds={selectedUserIds}
         allSelected={allSelected}
-        canAssignPlantel={canAssignPlantel && isSuperadmin}
+        canAssignPlantel={canAssignPlantel}
         onBulkAssign={handleBulkAssign}
         onBulkApprove={handleBulkApprove}
         onBulkSetActive={handleBulkSetActive}
@@ -277,9 +341,9 @@ export default function UserManagementPanel({
       <UserFichaTecnicaDrawer
         open={fichaDrawer.open}
         user={fichaDrawer.user}
-        planteles={permittedPlanteles}
-        canEdit={fichaDrawer.open && fichaDrawer.user && (isSuperadmin || administratorsPlanteles.includes(fichaDrawer.user.plantelId))}
-        editablePlanteles={permittedPlanteles}
+        planteles={planteles}
+        canEdit={fichaDrawer.open && fichaDrawer.user && (adminRole === "superadmin" || adminsPlanteles.includes(fichaDrawer.user.plantelId))}
+        editablePlanteles={editablePlanteles}
         onClose={closeFichaDrawer}
       />
     </section>

@@ -9,6 +9,8 @@ import PlantelAdminMatrix from "@/components/admin/PlantelAdminMatrix";
 import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
 import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
+import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixCrudClient";
+import AdminSidebar from "@/components/admin/AdminSidebar";
 
 // Determine "expediente completo"
 function isUserExpedienteComplete(user) {
@@ -44,16 +46,18 @@ export default async function AdminInicioPage({ searchParams }) {
     orderBy: { name: "asc" },
     select: { id: true, name: true }
   });
+
   let scopedPlantelIds, plantelesScoped;
   if (session.role === "superadmin") {
     scopedPlantelIds = planteles.map(p => p.id);
     plantelesScoped = planteles;
   } else {
-    scopedPlantelIds = (session.plantelesAdminIds || []);
+    scopedPlantelIds = Array.isArray(session.plantelesAdminIds)
+      ? session.plantelesAdminIds.map(Number).filter(n => !isNaN(n))
+      : [];
     plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
   }
 
-  // Only pass users in permitted planteles to ADMIN
   let users = await prisma.user.findMany({
     where: {
       role: { in: ["employee", "candidate"] },
@@ -67,7 +71,6 @@ export default async function AdminInicioPage({ searchParams }) {
   });
   const userIds = users.map(u => u.id);
 
-  // Extra safety: block any user not in permitted plantel from ever being seen by admin
   if (session.role === "admin") {
     users = users.filter(u => u.plantelId && scopedPlantelIds.includes(u.plantelId));
   }
@@ -124,7 +127,10 @@ export default async function AdminInicioPage({ searchParams }) {
     readyForApproval: readyForApproval(u)
   }));
 
-  const plantelData = plantelesScoped
+  const usedPlantelIds = new Set(usersFull.map(u => u.plantelId).filter(Boolean));
+  const filteredPlanteles = plantelesScoped.filter(p => usedPlantelIds.has(p.id));
+
+  const plantelData = filteredPlanteles
     .map(p => {
       const pUsers = usersFull.filter(u => u.plantelId === p.id);
       let completed = 0, readyToApprove = 0;
@@ -160,7 +166,9 @@ export default async function AdminInicioPage({ searchParams }) {
   const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
 
   const adminRole = session.role;
-  const adminPlantelesPermittedIds = session.plantelesAdminIds;
+  const adminPlantelesPermittedIds = session.role === "superadmin"
+    ? planteles.map(p => p.id)
+    : scopedPlantelIds;
 
   let admins = [];
   if (session.role === "superadmin") {
@@ -172,39 +180,49 @@ export default async function AdminInicioPage({ searchParams }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2">
+    <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2 relative">
       <AdminNav session={session} />
-
-      <div className="w-full max-w-7xl mt-20">
-        <AdminDashboardStats
-          summary={{
-            totalUsers,
-            completedExpedientes,
-            totalPlanteles,
-            percentComplete,
-          }}
-        />
-
+      {session.role === "superadmin" && (
+        <AdminSidebar className="hidden lg:flex" />
+      )}
+      <div className={`w-full max-w-7xl mt-20 ${session.role === "superadmin" ? "lg:pl-56" : ""}`}>
+        <section id="dashboard-stats" className="mb-8">
+          <AdminDashboardStats
+            summary={{
+              totalUsers,
+              completedExpedientes,
+              totalPlanteles,
+              percentComplete,
+            }}
+          />
+        </section>
         <UserManagementPanel
           users={usersFull}
-          planteles={plantelesScoped}
+          planteles={filteredPlanteles}
           adminRole={adminRole}
           plantelesPermittedIds={adminPlantelesPermittedIds}
           canAssignPlantel={session.role === "superadmin"}
         />
-
-        <PlantelProgressPanel planteles={plantelData} />
-
+        <section id="plantel-progress" className="mb-8">
+          <PlantelProgressPanel planteles={plantelData} />
+        </section>
         {session.role === "superadmin" && (
           <>
-            <PlantelListAdminPanelClient
-              initialPlanteles={planteles}
-              onRefresh={null}
-            />
-            <PlantelAdminMatrix
-              planteles={planteles}
-              admins={admins}
-            />
+            <section id="plantel-list-admin" className="mb-6">
+              <PlantelListAdminPanelClient
+                initialPlanteles={planteles}
+                onRefresh={null}
+              />
+            </section>
+            <section id="plantel-admin-matrix" className="mb-8">
+              <PlantelAdminMatrix
+                planteles={planteles}
+                admins={admins}
+              />
+            </section>
+            <section id="plantel-admin-matrix-crud" className="mb-10">
+              <PlantelAdminMatrixCrudClient />
+            </section>
           </>
         )}
       </div>

@@ -5,10 +5,6 @@ import { setSessionCookie } from "@/lib/auth";
 import { OAuth2Client } from "google-auth-library";
 
 const GSI_CLIENT_ID = process.env.NEXT_PUBLIC_GSI_CLIENT_ID;
-const superadminSeedEmails = [
-  "coord.admon@casitaiedis.edu.mx",
-  "rh@casitaiedis.edu.mx" // Only remaining default superadmins
-];
 
 export async function POST(req) {
   try {
@@ -31,38 +27,24 @@ export async function POST(req) {
       return NextResponse.json({ error: "Solo administradores IECS-IEDIS autorizados." }, { status: 403 });
     }
 
-    // Provision logic: superadmin if seeded, else admin
     let user = await prisma.user.findUnique({ where: { email } });
-    let provisionedRole = "admin";
-    if (superadminSeedEmails.map(e => e.trim().toLowerCase()).includes(email.trim().toLowerCase())) {
-      provisionedRole = "superadmin";
-    }
     if (user) {
-      // Only allow admin/superadmin to use this flow
       if (!["admin", "superadmin"].includes(user.role)) {
         return NextResponse.json({ error: "Acceso restringido solo a administradores institucionales." }, { status: 403 });
       }
-      // If user role is not correct (e.g., employee in DB, real admin): escalate to correct role
-      if (user.role !== provisionedRole) {
-        user = await prisma.user.update({
-          where: { email },
-          data: { role: provisionedRole, name, picture, isActive: true },
-        });
-      } else {
-        user = await prisma.user.update({
-          where: { email },
-          data: { name, picture, isActive: true },
-        });
-      }
+      user = await prisma.user.update({
+        where: { email },
+        data: { name, picture, isActive: true },
+      });
     } else {
-      // Create new admin account
+      // By default, create as admin
       user = await prisma.user.create({
         data: {
           name,
           email,
           picture,
           isActive: true,
-          role: provisionedRole,
+          role: "admin",
         }
       });
     }
