@@ -6,13 +6,11 @@ import UserManagementPanel from "@/components/admin/UserManagementPanel";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import PlantelAdminMatrix from "@/components/admin/PlantelAdminMatrix";
-import PlantelStatsCard from "@/components/admin/PlantelStatsCard";
 import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPanelClient";
 import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
 import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixCrudClient";
-import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminInicioClient from "@/components/admin/AdminInicioClient";
 
-// Determine "expediente completo"
 function isUserExpedienteComplete(user) {
   const fichaFields = [user.rfc, user.curp, user.domicilioFiscal, user.fechaIngreso, user.puesto, user.sueldo, user.horarioLaboral, user.plantelId];
   const fichaOk = fichaFields.every(f => !!f && String(f).trim().length > 0);
@@ -41,7 +39,6 @@ export default async function AdminInicioPage({ searchParams }) {
     );
   }
 
-  // Only pass permitted planteles to ADMIN
   let planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true }
@@ -69,6 +66,7 @@ export default async function AdminInicioPage({ searchParams }) {
     },
     orderBy: { name: "asc" }
   });
+
   const userIds = users.map(u => u.id);
 
   if (session.role === "admin") {
@@ -180,13 +178,10 @@ export default async function AdminInicioPage({ searchParams }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#faf6fe] via-[#dbf3de] to-[#e2f8fe] flex flex-col items-center pt-24 px-2 relative">
+    <AdminInicioClient session={session} showSidebar={session.role === "superadmin"}>
       <AdminNav session={session} />
-      {session.role === "superadmin" && (
-        <AdminSidebar className="hidden lg:flex" />
-      )}
-      <div className={`w-full max-w-7xl mt-20 ${session.role === "superadmin" ? "lg:pl-56" : ""}`}>
-        <section id="dashboard-stats" className="mb-8">
+      <main className="flex-1 flex flex-col gap-8 w-full min-w-0 max-w-full pt-24 md:pt-28 pb-6 md:pb-12">
+        <section id="dashboard-stats" className="w-full max-w-screen-xl mx-auto px-2 sm:px-4 md:px-7 mb-7">
           <AdminDashboardStats
             summary={{
               totalUsers,
@@ -196,36 +191,42 @@ export default async function AdminInicioPage({ searchParams }) {
             }}
           />
         </section>
-        <UserManagementPanel
-          users={usersFull}
-          planteles={filteredPlanteles}
-          adminRole={adminRole}
-          plantelesPermittedIds={adminPlantelesPermittedIds}
-          canAssignPlantel={session.role === "superadmin"}
-        />
-        <section id="plantel-progress" className="mb-8">
-          <PlantelProgressPanel planteles={plantelData} />
+        <section id="user-management" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+          <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+            <UserManagementPanel
+              users={usersFull}
+              planteles={filteredPlanteles}
+              adminRole={adminRole}
+              plantelesPermittedIds={adminPlantelesPermittedIds}
+              canAssignPlantel={session.role === "superadmin"}
+            />
+          </div>
+        </section>
+        <section id="plantel-progress" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+          <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+            <PlantelProgressPanel planteles={plantelData} />
+          </div>
         </section>
         {session.role === "superadmin" && (
           <>
-            <section id="plantel-list-admin" className="mb-6">
-              <PlantelListAdminPanelClient
-                initialPlanteles={planteles}
-                onRefresh={null}
-              />
+            <section id="plantel-list-admin" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+              <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+                <PlantelListAdminPanelClient initialPlanteles={planteles} onRefresh={null} />
+              </div>
             </section>
-            <section id="plantel-admin-matrix" className="mb-8">
-              <PlantelAdminMatrix
-                planteles={planteles}
-                admins={admins}
-              />
+            <section id="plantel-admin-matrix" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+              <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+                <PlantelAdminMatrix planteles={planteles} admins={admins} />
+              </div>
             </section>
-            <section id="plantel-admin-matrix-crud" className="mb-10">
-              <PlantelAdminMatrixCrudClient />
+            <section id="plantel-admin-matrix-crud" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+              <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+                <PlantelAdminMatrixCrudClient />
+              </div>
             </section>
           </>
         )}
-      </div>
-    </div>
+      </main>
+    </AdminInicioClient>
   );
 }
