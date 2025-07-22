@@ -1,8 +1,15 @@
 
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon, XMarkIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+
+// Constants for power-user table compactness
+const ADMIN_COL_MIN = 110; // px
+const CORREO_COL_MIN = 120;
+const PLANTEL_COL_MIN = 64;
+const PLANTEL_COL_MAX = 110;
+const ACTION_COL_MIN = 56;
 
 export default function PlantelAdminMatrixCrud() {
   const [loading, setLoading] = useState(false);
@@ -15,10 +22,7 @@ export default function PlantelAdminMatrixCrud() {
   const [addEmail, setAddEmail] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
-
-  // Filter UX
   const [rowFilter, setRowFilter] = useState("");
-  const matrixRef = useRef();
 
   async function fetchMatrix() {
     setLoading(true);
@@ -33,9 +37,7 @@ export default function PlantelAdminMatrixCrud() {
     }
     setLoading(false);
   }
-  useEffect(() => {
-    fetchMatrix();
-  }, []);
+  useEffect(() => { fetchMatrix(); }, []);
 
   function isAssigned(admin, plantelId) {
     return admin.plantelesAdmin.some(p => p.id === plantelId);
@@ -48,7 +50,7 @@ export default function PlantelAdminMatrixCrud() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ adminId, plantelId, assigned })
+        body: JSON.stringify({ adminId, plantelId, assigned }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Error de red");
       await fetchMatrix();
@@ -61,14 +63,13 @@ export default function PlantelAdminMatrixCrud() {
   async function handleAddAdmin(e) {
     e.preventDefault();
     setAddLoading(true);
-    setMsg("");
-    setError("");
+    setMsg(""); setError("");
     try {
       const res = await fetch("/api/admin/plantel-admin-matrix/add-admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim() })
+        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim() }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "No se pudo crear admin");
       setMsg("Administrador creado.");
@@ -84,7 +85,7 @@ export default function PlantelAdminMatrixCrud() {
   async function handleRemoveAdmin(id) {
     setLoading(true); setMsg(""); setError("");
     try {
-      const res = await fetch("/api/admin/plantel-admin-matrix/remove-admin?id="+id, {
+      const res = await fetch("/api/admin/plantel-admin-matrix/remove-admin?id=" + id, {
         method: "DELETE",
         credentials: "same-origin"
       });
@@ -98,7 +99,6 @@ export default function PlantelAdminMatrixCrud() {
     setLoading(false);
   }
 
-  // -- FILTERED VIEW: --
   const adminsFiltered = matrix.admins.filter(a =>
     !rowFilter ||
     a.name.toLowerCase().includes(rowFilter.trim().toLowerCase()) ||
@@ -106,10 +106,7 @@ export default function PlantelAdminMatrixCrud() {
   );
 
   return (
-    <section className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-8 transition-all duration-200"
-             id="plantel-admin-matrix-crud"
-             ref={matrixRef}
-    >
+    <section className="w-full bg-white border border-cyan-200 shadow-xl rounded-2xl p-4 mb-32">
       <header className="flex flex-wrap items-center justify-between mb-3 gap-3">
         <div className="flex items-center gap-3 font-bold text-cyan-800 text-lg">
           Administradores de planteles
@@ -122,14 +119,15 @@ export default function PlantelAdminMatrixCrud() {
           >
             <MagnifyingGlassIcon className="w-5 h-5 text-cyan-400 absolute top-2.5 left-2" />
             <input
-              className="pl-8 pr-2 py-2 rounded border border-cyan-200 text-xs sm:text-sm transition w-[120px] xs:w-[150px] sm:w-[200px] bg-white font-mono"
+              className="pl-8 pr-2 py-2 rounded border border-cyan-200 text-xs sm:text-sm w-[120px] xs:w-[150px] sm:w-[200px] bg-white font-mono"
               placeholder="Filtrar admin/correo"
               value={rowFilter}
               onChange={e => setRowFilter(e.target.value)}
+              aria-label="Buscar administrador"
             />
           </form>
           <button
-            className="flex items-center gap-1 px-3 py-1 bg-cyan-700 hover:bg-cyan-900 transition text-white text-xs rounded-full shadow font-bold"
+            className="flex items-center gap-1 px-3 py-1 bg-cyan-700 hover:bg-cyan-900 text-white text-xs rounded-full shadow font-bold"
             onClick={() => setAddOpen(true)}
             type="button"
             aria-label="Agregar nuevo admin"
@@ -138,97 +136,120 @@ export default function PlantelAdminMatrixCrud() {
           </button>
         </div>
       </header>
-      {(msg || error) && (
+      {(msg || error) &&
         <div className={`mb-2 text-center text-xs font-semibold ${msg ? "text-emerald-800" : "text-red-700"}`}>{msg || error}</div>
-      )}
-      <div className="w-full overflow-x-auto border rounded-lg bg-slate-50 relative">
-        <table className="min-w-fit w-full table-auto text-xs md:text-sm border-separate border-spacing-0">
+      }
+      <div className="w-full overflow-x-auto border rounded-lg bg-slate-50 relative" style={{ WebkitOverflowScrolling: "touch" }}>
+        <table className="min-w-fit w-max table-auto border-separate border-spacing-0 text-xs" style={{ fontVariantNumeric: "tabular-nums", fontSize: "13px" }}>
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 bg-white z-30 px-2 py-3 font-bold text-left border-r-2 border-cyan-100 min-w-[180px] shadow-md"
-                  style={{ boxShadow: "4px 0 5px -4px #d1eafd" }}>
+              <th
+                className="sticky left-0 top-0 z-40 bg-white font-semibold border-r-2 border-cyan-100 shadow-md px-2 py-2 text-cyan-800"
+                style={{ minWidth: ADMIN_COL_MIN, width: ADMIN_COL_MIN, fontWeight: 700 }}
+                scope="col"
+              >
                 Admin
               </th>
-              <th className="sticky left-[180px] top-0 bg-white z-30 px-2 py-3 font-bold text-left border-r-2 border-cyan-50 min-w-[160px] shadow-md"
-                  style={{ boxShadow: "4px 0 4px -5px #d1eafd" }}>
+              <th
+                className="sticky left-[110px] top-0 z-40 bg-white font-semibold border-r-2 border-cyan-50 shadow-md px-2 py-2 text-cyan-800"
+                style={{ minWidth: CORREO_COL_MIN, width: CORREO_COL_MIN }}
+                scope="col"
+              >
                 Correo
               </th>
-              {matrix.planteles.map((pl, i) => (
+              {matrix.planteles.map((pl, j) => (
                 <th
                   key={pl.id}
-                  className={`sticky top-0 bg-white z-20 text-center font-bold py-3 px-2 border-b-2 border-cyan-50 min-w-[120px]`}
-                >
-                  <span className="block truncate font-semibold">{pl.label || pl.name}</span>
-                </th>
+                  className="sticky top-0 z-30 bg-white text-center font-bold border-b-2 border-cyan-50 px-1 py-2 text-cyan-700"
+                  style={{
+                    left: `${ADMIN_COL_MIN + CORREO_COL_MIN + j * PLANTEL_COL_MIN}px`,
+                    minWidth: PLANTEL_COL_MIN, maxWidth: PLANTEL_COL_MAX, width: PLANTEL_COL_MIN,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    fontWeight: 700,
+                  }}
+                  scope="col"
+                  title={pl.name}
+                >{pl.name}</th>
               ))}
-              <th className="sticky top-0 bg-white z-30 px-2 py-3 font-bold text-center border-l-2 border-cyan-50 min-w-[84px] shadow-md">Eliminar</th>
+              <th
+                className="sticky top-0 z-40 bg-white text-center font-semibold border-l-2 border-cyan-50 shadow-md px-1 py-2 text-cyan-800"
+                style={{ minWidth: ACTION_COL_MIN, width: ACTION_COL_MIN }}
+                scope="col"
+              >
+                Elim.
+              </th>
             </tr>
           </thead>
           <tbody>
             {adminsFiltered.map((a) => (
               <tr key={a.id} className="bg-white border-b border-cyan-50">
                 <td
-                  className="sticky left-0 bg-white z-20 px-2 py-2 border-r-2 border-cyan-100 min-w-[180px] font-semibold shadow-md"
-                  style={{ boxShadow: "4px 0 4px -6px #d1eafd" }}
+                  className="sticky left-0 bg-white z-30 px-2 py-1.5 border-r-2 border-cyan-100 font-semibold shadow-md"
+                  style={{ minWidth: ADMIN_COL_MIN, width: ADMIN_COL_MIN, fontWeight: 700 }}
+                  scope="row"
                 >
                   <div className="flex gap-2 items-center">
-                    <Image src={a.picture || "/IMAGOTIPO-IECS-IEDIS.png"} width={22} height={22} alt="" className="rounded-full bg-slate-100" />
-                    <span className="text-cyan-900 font-bold text-[14px] truncate">{a.name}</span>
+                    <Image src={a.picture || "/IMAGOTIPO-IECS-IEDIS.png"} width={19} height={19} alt="" className="rounded-full bg-slate-100" />
+                    <span className="text-cyan-900 font-bold truncate">{a.name}</span>
                   </div>
                   {a.isActive
-                    ? <CheckCircleIcon className="w-4 h-4 text-emerald-500 inline mb-1 ml-1" />
-                    : <XMarkIcon className="w-4 h-4 text-slate-300 inline mb-1 ml-1" />
+                    ? <CheckCircleIcon className="w-4 h-4 text-emerald-500 inline mb-0.5 ml-1" />
+                    : <XMarkIcon className="w-4 h-4 text-slate-300 inline mb-0.5 ml-1" />
                   }
                 </td>
                 <td
-                  className="sticky left-[180px] bg-white z-20 px-2 py-2 border-r-2 border-cyan-50 min-w-[160px] font-mono shadow"
-                  style={{ boxShadow: "3px 0 3px -4px #d1eafd" }}
+                  className="sticky left-[110px] bg-white z-20 px-2 py-1.5 border-r-2 border-cyan-50 font-mono shadow"
+                  style={{ minWidth: CORREO_COL_MIN, width: CORREO_COL_MIN }}
                 >
-                  <span className="text-slate-700 text-[13px]">{a.email}</span>
+                  <span className="text-slate-700">{a.email}</span>
                 </td>
-                {matrix.planteles.map((pl, i) => {
+                {matrix.planteles.map((pl, j) => {
                   const checked = isAssigned(a, pl.id);
                   const busy = !!editState[a.id + "-" + pl.id];
                   return (
                     <td
                       key={pl.id}
-                      className="align-middle py-2 px-2 text-center bg-white"
+                      className="align-middle py-1 px-1 text-center bg-white"
                       style={{
-                        minWidth: 120,
-                        background: "#fff",
+                        minWidth: PLANTEL_COL_MIN,
+                        maxWidth: PLANTEL_COL_MAX,
+                        width: PLANTEL_COL_MIN,
+                        overflow: "hidden",
                         zIndex: 10,
                       }}
                     >
                       <input
                         type="checkbox"
-                        className="accent-cyan-800 w-5 h-5"
+                        className="accent-cyan-700 w-4 h-4"
                         checked={checked}
                         disabled={busy || loading}
                         onChange={ev => handleAssignToggle(a.id, pl.id, !checked)}
-                        aria-label={`Administrador(a) ${a.name} para plantel ${pl.label || pl.name}`}
+                        aria-label={`Administrador(a) ${a.name} para plantel ${pl.name}`}
+                        tabIndex={0}
                       />
                     </td>
                   );
                 })}
-                <td className="py-2 px-2 text-center bg-white min-w-[84px]">
+                <td className="py-1 px-1 text-center bg-white" style={{ minWidth: ACTION_COL_MIN, width: ACTION_COL_MIN }}>
                   <button
                     className="text-red-700 hover:bg-red-100 rounded-full px-2 py-1"
                     onClick={() => setRemoveTarget(a)}
                     disabled={loading}
                     title="Eliminar admin"
                   >
-                    <TrashIcon className="w-5 h-5" />
+                    <TrashIcon className="w-4 h-4" />
                   </button>
                 </td>
               </tr>
             ))}
             {adminsFiltered.length === 0 && (
               <tr>
-                <td colSpan={2 + matrix.planteles.length + 1} className="text-center py-4 text-slate-400">No hay administradores y/o filtro.</td>
+                <td colSpan={2 + matrix.planteles.length + 1} className="text-center py-4 text-slate-400">Sin administradores y/o filtro.</td>
               </tr>
             )}
           </tbody>
         </table>
+        <div className="h-28"></div>
       </div>
       {addOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
