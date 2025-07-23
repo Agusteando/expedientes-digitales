@@ -13,47 +13,32 @@ export async function GET(request, context) {
   const session = await getServerSession(authOptions);
 
   // Debug: Log incoming request params and session
-  console.log("[Expediente API GET] params:", params);
-  console.log("[Expediente API GET] session.user:", session?.user);
+  // console.log("[Expediente API GET] params:", params);
+  // console.log("[Expediente API GET] session.user:", session?.user);
 
   if (
     !session ||
     !session.user ||
     (session.user.role !== "employee" && session.user.role !== "candidate" && session.user.role !== "admin" && session.user.role !== "superadmin")
   ) {
-    console.warn("[Expediente API] Unauthorized: session invalid or role not allowed.", {
-      session: session,
-    });
     return Response.json({ error: "Unauthorized", debug: { session } }, { status: 401 });
   }
 
   if (!params || typeof params.userId !== "string") {
-    console.error("[Expediente API] Invalid params:", params);
     return Response.json({ error: "Invalid or missing userId param", debug: { params } }, { status: 400 });
   }
 
   const { userId } = params;
   const userIdNum = Number(userId);
   if (Number.isNaN(userIdNum)) {
-    console.error("[Expediente API] userId is not a number:", userId);
     return Response.json({ error: "userId invalid", debug: { userId } }, { status: 400 });
   }
-  console.log("[Expediente API] Param userId as string:", userId, "; as number:", userIdNum);
-
-  // Compare as strings to avoid type mismatches (id may be number or string)
-  console.log("[Expediente API] Comparing session.user.id to userId:", session.user.id, userId, "(as strings)", String(session.user.id), String(userId));
-  console.log("[Expediente API] session.user.role:", session.user.role);
 
   // Only allow fetching self (unless admin/superadmin)
   if (
     String(session.user.id) !== String(userId) &&
     !(session.user.role === "admin" || session.user.role === "superadmin")
   ) {
-    console.warn("[Expediente API] No access: Not self or admin/superadmin.", {
-      sessionUserId: session.user.id,
-      paramUserId: userId,
-      sessionRole: session.user.role,
-    });
     return Response.json({
       error: "No access",
       debug: {
@@ -63,6 +48,22 @@ export async function GET(request, context) {
         session,
       }
     }, { status: 403 });
+  }
+
+  // Fetch full user profile for virtual plantel checklist fulfillment logic
+  let userProfile = null;
+  try {
+    userProfile = await prisma.user.findUnique({
+      where: { id: userIdNum },
+      select: {
+        plantelId: true,
+        rfc: true,
+        curp: true,
+        email: true,
+      },
+    });
+  } catch (err) {
+    return Response.json({ error: "User fetch failed", debug: { errMsg: err.message } }, { status: 500 });
   }
 
   // Gather all checklist items with documents for user, order by type
@@ -75,9 +76,8 @@ export async function GET(request, context) {
       },
       orderBy: [{ type: "asc" }],
     });
-    console.log(`[Expediente API] checklistItems found: ${checklistItems.length}`);
+    // console.log(`[Expediente API] checklistItems found: ${checklistItems.length}`);
   } catch (err) {
-    console.error("[Expediente API] checklistItem.findMany failed:", err);
     return Response.json({ error: "Checklist error", debug: { errMsg: err.message } }, { status: 500 });
   }
 
@@ -88,9 +88,7 @@ export async function GET(request, context) {
       where: { userId: userIdNum },
       orderBy: [{ uploadedAt: "desc" }],
     });
-    console.log(`[Expediente API] allDocuments found: ${allDocuments.length}`);
   } catch (err) {
-    console.error("[Expediente API] document.findMany failed:", err);
     allDocuments = [];
   }
 
@@ -101,9 +99,7 @@ export async function GET(request, context) {
       where: { userId: userIdNum },
       orderBy: [{ createdAt: "desc" }],
     });
-    console.log(`[Expediente API] signatures found: ${signatures.length}`);
   } catch (err) {
-    console.error("[Expediente API] signature.findMany failed:", err);
     signatures = [];
   }
 
@@ -120,17 +116,26 @@ export async function GET(request, context) {
       : [];
   }
 
-  // Step status for each step
+  // Step status for each step (virtual checklist fulfillment for "plantel" step!)
   const stepStatus = {};
   for (let s of stepsExpediente) {
-    const checklist = checklistItems.find(c => c.type === s.key) || null;
-    const document = (stepHistory[s.key] && stepHistory[s.key][0]) || null; // latest
-    const signature = s.signable
-      ? signatures.find(sig => sig.type === s.key) || null
-      : null;
+    let checklist = checklistItems.find(c => c.type === s.key) || null;
+    let document = (stepHistory[s.key] && stepHistory[s.key][0]) || null; // latest
+    let signature = null;
+
+    // SPECIAL LOGIC: Plantel step is "done" when plantelId, rfc, curp, email are all present
+    if (s.key === "plantel") {
+      checklist = {
+        fulfilled:
+          !!userProfile.plantelId &&
+          !!userProfile.rfc &&
+          !!userProfile.curp &&
+          !!userProfile.email
+      };
+    }
+
     stepStatus[s.key] = { checklist, document, signature };
   }
 
-  console.log("[Expediente API] Returning stepHistory and stepStatus.");
   return Response.json({ stepHistory, stepStatus });
 }
