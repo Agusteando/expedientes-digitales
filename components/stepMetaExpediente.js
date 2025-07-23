@@ -81,7 +81,7 @@ export const stepsExpediente = [
     label: "Carta de No Penales",
     description: "Adjunta carta de antecedentes no penales.",
   },
-  // Admin-only: proyectivos
+  // Admin-only
   {
     key: "proyectivos",
     iconKey: "DocumentTextIcon",

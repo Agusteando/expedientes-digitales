@@ -10,21 +10,18 @@ import PlantelListAdminPanelClient from "@/components/admin/PlantelListAdminPane
 import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
 import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixCrudClient";
 import AdminInicioClient from "@/components/admin/AdminInicioClient";
+import { stepsExpediente } from "@/components/stepMetaExpediente";
 
-function isUserExpedienteComplete(user) {
-  const fichaFields = [user.rfc, user.curp, user.domicilioFiscal, user.fechaIngreso, user.puesto, user.sueldo, user.horarioLaboral, user.plantelId];
-  const fichaOk = fichaFields.every(f => !!f && String(f).trim().length > 0);
-  const requiredKeys = new Set((require("@/components/stepMetaExpediente").stepsExpediente || [])
-    .filter(s => !s.signable && !s.isPlantelSelection)
-    .map(s => s.key));
-  const checklistOk = Array.from(requiredKeys).every(key =>
-    user.checklistItems?.some(item => item.type === key && item.fulfilled));
-  const regSig = user.signatures?.find(s => s.type === "reglamento");
-  const contSig = user.signatures?.find(s => s.type === "contrato");
-  const firmasOk =
-    regSig && ["signed", "completed"].includes(regSig.status) &&
-    contSig && ["signed", "completed"].includes(contSig.status);
-  return fichaOk && checklistOk && firmasOk && !!user.plantelId;
+// Only non-admin-upload, non-plantel steps (i.e., strictly user-uploaded docs)
+const userChecklistKeys = stepsExpediente.filter(
+  s => !s.adminUploadOnly && !s.isPlantelSelection
+).map(s => s.key);
+
+function isUserExpedienteDigitalComplete(userChecklist) {
+  // userChecklist: array of {type, fulfilled}
+  return userChecklistKeys.every(key =>
+    userChecklist.some(item => item.type === key && item.fulfilled)
+  );
 }
 
 export default async function AdminInicioPage({ searchParams }) {
@@ -55,6 +52,7 @@ export default async function AdminInicioPage({ searchParams }) {
     plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
   }
 
+  // Only count non-admin users for KPIs
   let users = await prisma.user.findMany({
     where: {
       role: { in: ["employee", "candidate"] },
@@ -62,7 +60,6 @@ export default async function AdminInicioPage({ searchParams }) {
     },
     select: {
       id: true, name: true, email: true, picture: true, role: true, isApproved: true, plantelId: true, isActive: true,
-      rfc: true, curp: true, domicilioFiscal: true, fechaIngreso: true, puesto: true, sueldo: true, horarioLaboral: true,
     },
     orderBy: { name: "asc" }
   });
@@ -73,100 +70,44 @@ export default async function AdminInicioPage({ searchParams }) {
     users = users.filter(u => u.plantelId && scopedPlantelIds.includes(u.plantelId));
   }
 
-  if (typeof prisma.checklistItem !== "object" || typeof prisma.checklistItem.findMany !== "function") {
-    return (
-      <div className="p-10 text-center text-red-700 font-bold">
-        <div>
-          Error: prisma.checklistItem is missing on your Prisma Client instance.<br />
-          <span className="text-black">Did you recently change your schema or add a model? <b>Run <span className="font-mono bg-slate-200 rounded px-2 py-0.5">npx prisma generate</span> and restart your server</b>.</span>
-        </div>
-      </div>
-    );
-  }
+  // Fetch all checklist items for non-admin users
   const allChecklist = await prisma.checklistItem.findMany({
     where: { userId: { in: userIds }, required: true },
     select: { id: true, userId: true, fulfilled: true, type: true }
   });
-  const allSigs = await prisma.signature.findMany({
-    where: { userId: { in: userIds } },
-    select: { id: true, userId: true, type: true, status: true }
-  });
+
+  // Build user checklist map and completion status
   const byUserChecklist = {};
   for (const c of allChecklist) {
     (byUserChecklist[c.userId] ||= []).push(c);
   }
-  const byUserSigs = {};
-  for (const s of allSigs) {
-    (byUserSigs[s.userId] ||= []).push(s);
-  }
 
-  const stepsExpediente = require("@/components/stepMetaExpediente").stepsExpediente;
-  const checklistRequiredKeys = stepsExpediente.filter(
-    s => !s.signable && !s.isPlantelSelection
-  ).map(s => s.key);
-
-  function readyForApproval(u) {
-    if (u.role !== "candidate" || !u.isActive) return false;
-    const check = byUserChecklist[u.id] || [];
-    const allDocsOk = checklistRequiredKeys.every(
-      key => check.find(c => c.type === key && c.fulfilled)
-    );
-    const sigs = byUserSigs[u.id] || [];
-    const regSig = sigs.find(s => s.type === "reglamento" && ["signed", "completed"].includes(s.status));
-    const contSig = sigs.find(s => s.type === "contrato" && ["signed", "completed"].includes(s.status));
-    return allDocsOk && regSig && contSig;
-  }
-
-  const usersFull = users.map(u => ({
-    ...u,
-    isActive: !!u.isActive,
-    checklistItems: byUserChecklist[u.id] || [],
-    signatures: byUserSigs[u.id] || [],
-    readyForApproval: readyForApproval(u)
-  }));
-
-  const usedPlantelIds = new Set(usersFull.map(u => u.plantelId).filter(Boolean));
-  const filteredPlanteles = plantelesScoped.filter(p => usedPlantelIds.has(p.id));
-
-  const plantelData = filteredPlanteles
-    .map(p => {
-      const pUsers = usersFull.filter(u => u.plantelId === p.id);
-      let completed = 0, readyToApprove = 0;
-      pUsers.forEach(u => {
-        if (isUserExpedienteComplete(u)) completed++;
-        const check = u.checklistItems || [];
-        const stepsReq = stepsExpediente.filter(s => !s.signable && !s.isPlantelSelection);
-        const checklistOk = stepsReq.every(st =>
-          check.find(c => c.type === st.key && c.fulfilled));
-        const regSig = u.signatures?.find(s => s.type === "reglamento");
-        const contSig = u.signatures?.find(s => s.type === "contrato");
-        const firmasOk =
-          regSig && ["signed", "completed"].includes(regSig.status) &&
-          contSig && ["signed", "completed"].includes(contSig.status);
-        if (u.role === "candidate" && checklistOk && firmasOk) readyToApprove++;
-      });
-      return {
-        id: p.id, name: p.name,
-        progress: {
-          total: pUsers.length,
-          completed,
-          readyToApprove
-        },
-        employees: pUsers
-      };
-    });
-
-  let totalUsers = 0, completedExpedientes = 0, totalPlanteles = plantelData.length;
-  plantelData.forEach(p => {
-    totalUsers += p.progress.total;
-    completedExpedientes += p.progress.completed;
+  // For admin completion: proyectivos only
+  const userDocs = await prisma.document.findMany({
+    where: { userId: { in: userIds } },
+    select: { id: true, userId: true, type: true, status: true }
   });
-  const percentComplete = totalUsers === 0 ? 0 : Math.round((completedExpedientes / totalUsers) * 100);
+  const projByUser = {};
+  for (const d of userDocs) {
+    if (d.type === "proyectivos" && d.status === "ACCEPTED") {
+      projByUser[d.userId] = true;
+    }
+  }
 
-  const adminRole = session.role;
-  const adminPlantelesPermittedIds = session.role === "superadmin"
-    ? planteles.map(p => p.id)
-    : scopedPlantelIds;
+  // USERS/EXP. DIGITALES KPIs
+  const totalUsers = users.length; // true non-admin user total!
+  let userDocsCompleted = 0;
+  let expedientesValidados = 0;
+  users.forEach(u => {
+    const checklist = byUserChecklist[u.id] || [];
+    const digitalComplete = isUserExpedienteDigitalComplete(checklist);
+    if (digitalComplete) userDocsCompleted++;
+    if (digitalComplete && !!projByUser[u.id]) expedientesValidados++; // only if user digital AND admin proyectivos
+  });
+  const percentDigitalExpedientes = totalUsers === 0 ? 0 : Math.round((userDocsCompleted / totalUsers) * 100);
+  const percentFinalExpedientes = totalUsers === 0 ? 0 : Math.round((expedientesValidados / totalUsers) * 100);
+  const totalPlanteles = plantelesScoped.length;
+  const totalDocuments = await prisma.document.count();
 
   let admins = [];
   if (session.role === "superadmin") {
@@ -177,6 +118,31 @@ export default async function AdminInicioPage({ searchParams }) {
     });
   }
 
+  // Recalculate proper per-plantel progress structure, using userDocsCompleted and expedientesValidados logic:
+  const usedPlantelIds = new Set(users.map(u => u.plantelId).filter(Boolean));
+  const filteredPlanteles = plantelesScoped.filter(p => usedPlantelIds.has(p.id));
+
+  const plantelProgressData = filteredPlanteles.map(p => {
+    const employees = users.filter(u => u.plantelId === p.id);
+    const userDocsGood = employees.filter(u => isUserExpedienteDigitalComplete(byUserChecklist[u.id] || [])).length;
+    const expedientesFinal = employees.filter(u =>
+      isUserExpedienteDigitalComplete(byUserChecklist[u.id] || []) && !!projByUser[u.id]
+    ).length;
+    const percentDigital = employees.length === 0 ? 0 : Math.round((userDocsGood / employees.length) * 100);
+    const percentFinal = employees.length === 0 ? 0 : Math.round((expedientesFinal / employees.length) * 100);
+    return {
+      ...p,
+      employees,
+      progress: {
+        total: employees.length,
+        userDocsCompleted: userDocsGood,
+        expedientesValidados: expedientesFinal,
+        percentDigitalExpedientes: percentDigital,
+        percentFinalExpedientes: percentFinal
+      }
+    };
+  });
+
   return (
     <AdminInicioClient session={session} showSidebar={session.role === "superadmin"}>
       <AdminNav session={session} />
@@ -184,27 +150,29 @@ export default async function AdminInicioPage({ searchParams }) {
         <section id="dashboard-stats" className="w-full max-w-screen-xl mx-auto px-2 sm:px-4 md:px-7 mb-7">
           <AdminDashboardStats
             summary={{
+              userDocsCompleted,
               totalUsers,
-              completedExpedientes,
               totalPlanteles,
-              percentComplete,
+              percentDigitalExpedientes,
+              percentFinalExpedientes,
+              totalDocuments,
             }}
           />
         </section>
         <section id="user-management" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
           <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
             <UserManagementPanel
-              users={usersFull}
+              users={users}
               planteles={filteredPlanteles}
-              adminRole={adminRole}
-              plantelesPermittedIds={adminPlantelesPermittedIds}
+              adminRole={session.role}
+              plantelesPermittedIds={session.role === "superadmin" ? planteles.map(p => p.id) : scopedPlantelIds}
               canAssignPlantel={session.role === "superadmin"}
             />
           </div>
         </section>
         <section id="plantel-progress" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
           <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
-            <PlantelProgressPanel planteles={plantelData} />
+            <PlantelProgressPanel planteles={plantelProgressData} />
           </div>
         </section>
         {session.role === "superadmin" && (
