@@ -152,18 +152,40 @@ export default function UserDocsDrawer({ open, user, onClose }) {
 
   if (!open || !user) return null;
 
-  const userDocs = docs?.documents || [];
-  const docsByType = Object.fromEntries(userDocs.map((doc) => [doc.type, doc]));
-  const userChecklist = docs?.checklist || [];
-  const checklistByType = Object.fromEntries(userChecklist.map((c) => [c.type, c]));
+  // Docs normalized: for each type keep only the last version
+  const userDocsArr = docs?.documents || [];
+  // Get only last version per type (sorted desc by version, pick first seen type)
+  const docsByType = {};
+  for (const doc of userDocsArr.sort((a, b) => (b.version || 1) - (a.version || 1))) {
+    if (!docsByType[doc.type]) docsByType[doc.type] = doc;
+  }
 
-  // Progress bar
+  const userChecklistArr = docs?.checklist || [];
+  const checklistByType = Object.fromEntries(userChecklistArr.map((c) => [c.type, c]));
+
+  // Progress bar logic
   const stepsAll = stepsExpediente.filter(s => !s.isPlantelSelection);
   const checklistRequired = stepsAll.filter(s => !s.signable && !s.adminUploadOnly).map(s => s.key);
   const adminUploadKeys = Object.keys(ADMIN_UPLOAD_TYPES);
+
+  // Calculate checklist fulfilled, but auto-succeed if a doc of this type exists
+  const fulfilledByType = {};
+  for (const key of checklistRequired) {
+    if (docsByType[key]) {
+      fulfilledByType[key] = true;
+    } else if (checklistByType[key]?.fulfilled) {
+      fulfilledByType[key] = true;
+    } else {
+      fulfilledByType[key] = false;
+    }
+  }
+  // Proyectivos/admin-only handled separately
+  for (const key of adminUploadKeys) {
+    fulfilledByType[key] = !!docsByType[key];
+  }
   const fulfilledCount =
-    checklistRequired.reduce((s, k) => (checklistByType[k]?.fulfilled ? s+1:s), 0) +
-    adminUploadKeys.reduce((s,k)=> docsByType[k]?s+1:s,0);
+    checklistRequired.reduce((s, k) => (fulfilledByType[k] ? s+1 : s), 0) +
+    adminUploadKeys.reduce((s, k) => (fulfilledByType[k] ? s+1 : s), 0);
   const totalRequired = checklistRequired.length + adminUploadKeys.length;
   const progressPct = totalRequired ? Math.round(fulfilledCount/totalRequired*100) : 0;
 
@@ -313,7 +335,9 @@ export default function UserDocsDrawer({ open, user, onClose }) {
               }
               // Other checklist items
               const item = checklistByType[st.key];
-              const fulfilled = !!item?.fulfilled;
+              const doc = docsByType[st.key];
+              // Mark fulfilled if either checklist/fulfilled or doc exists!
+              const fulfilled = fulfilledByType[st.key];
               const Icon = checklistIcon(fulfilled);
               return (
                 <div
@@ -329,40 +353,29 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   <div className="text-xs text-slate-500">
                     {fulfilled ? "Entregado / válido" : "No entregado"}
                   </div>
+                  {doc && (
+                    <div className="flex flex-col mt-2 gap-1">
+                      <a
+                        href={doc.filePath}
+                        target="_blank"
+                        rel="noopener"
+                        className="flex items-center gap-2 border border-cyan-200 px-3 py-1 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs w-fit"
+                      >
+                        <ArrowDownTrayIcon className="w-4 h-4" />
+                        Descargar último documento v{doc.version}
+                      </a>
+                      <span className="text-xs text-slate-400">
+                        Subido el {formatDateDisplay(doc.uploadedAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          <div className="mb-2 font-bold text-black mt-3 text-base flex items-center gap-2">
-            <CloudArrowDownIcon className="w-6 h-6 text-cyan-600 inline" />
-            Archivos subidos
-          </div>
-          <ul className="mb-3 grid grid-cols-1 gap-2">
-            {userDocs.map(doc => (
-              <li
-                key={doc.id}
-                className="flex flex-row items-center gap-2 text-xs border border-slate-100 bg-slate-50 rounded px-2 py-1"
-              >
-                <DocumentCheckIcon className="w-5 h-5 text-cyan-500" />
-                <a
-                  href={doc.filePath}
-                  target="_blank"
-                  className="text-cyan-700 underline font-bold"
-                >
-                  {checklistLabel(doc.type)} v{doc.version}
-                </a>
-                <span className="text-xs text-slate-400 ml-2">
-                  {formatDateDisplay(doc.uploadedAt)}
-                </span>
-              </li>
-            ))}
-            {userDocs.length === 0 && (
-              <li className="text-xs text-slate-400 px-2 py-1">
-                — Sin archivos aún —
-              </li>
-            )}
-          </ul>
+          {/* This block is now replaced by the file info inside each checklist card */}
+
         </div>
       </div>
     </div>
