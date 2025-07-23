@@ -1,6 +1,5 @@
 
 "use client";
-
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { ArrowLeftCircleIcon, ArrowRightCircleIcon } from "@heroicons/react/24/solid";
@@ -10,7 +9,7 @@ import OnboardingStepper from "./OnboardingStepper";
 import StepPlantelSelection from "./StepPlantelSelection";
 import StepDigitalPhoto from "./StepDigitalPhoto";
 import StepDocumentUpload from "./StepDocumentUpload";
-import StepSignableDocument from "./StepSignableDocument";
+import StepExpedienteSummary from "./StepExpedienteSummary";
 import StepSummary from "./StepSummary";
 import WelcomeApproved from "./WelcomeApproved";
 import { getStatusMeta } from "@/lib/expedienteStatus";
@@ -26,8 +25,6 @@ const iconMap = {
   ReceiptRefundIcon:      require("@heroicons/react/24/solid").ReceiptRefundIcon,
   UserPlusIcon:           require("@heroicons/react/24/solid").UserPlusIcon,
   CheckCircleIcon:        require("@heroicons/react/24/solid").CheckCircleIcon,
-  BookOpenIcon:           require("@heroicons/react/24/solid").BookOpenIcon,
-  PencilSquareIcon:       require("@heroicons/react/24/solid").PencilSquareIcon,
 };
 
 export default function EmployeeOnboardingWizard({ user: userProp, mode = "expediente" }) {
@@ -38,20 +35,21 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const [stepStatus, setStepStatus] = useState({});
   const [stepHistory, setStepHistory] = useState({});
   const [planteles, setPlanteles] = useState([]);
-  const steps = stepsExpediente;
-  const totalSteps = steps.length;
-  const requiredUploadSteps = useMemo(
-    () => steps.filter(s => !s.adminUploadOnly && !s.signable && !s.isPlantelSelection && !s.isAvatar).map(s => s.key),
-    [steps]
+  // Show only non-admin-upload steps for user; add summary step
+  const userSteps = useMemo(
+    () =>
+      stepsExpediente.filter(s => !s.adminUploadOnly)
+      .concat([{ key: "__expediente_summary__", label: "Resumen de expediente", description: "" }]),
+    []
   );
-  const requiredAdminSteps = steps.filter(s => s.adminUploadOnly).map(s => s.key);
+  const totalSteps = userSteps.length;
+
+  // Rest of document upload/upload state logic unchanged
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [uploadProgress, setUploadProgress] = useState(null);
-  const [signatureStatus, setSignatureStatus] = useState(null);
-  const [signatureLoading, setSignatureLoading] = useState(false);
   const [savingPlantel, setSavingPlantel] = useState(false);
   const successTimeout = useRef();
 
@@ -144,7 +142,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
           return;
         }
       }
-      // After all save cycles, update user object
       setUser(u => ({
         ...u,
         plantelId: parseInt(plantelId, 10),
@@ -225,75 +222,40 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     xhr.send(formData);
   }
 
-  async function handleSign(key) {
-    setSignatureLoading(true); setSignatureStatus("");
-    try {
-      const res = await fetch(`/api/documents/${user.id}/${key}/sign`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setSignatureStatus(data.error || "No se pudo iniciar la firma.");
-      } else {
-        setSignatureStatus("Abre el widget y firma tu documento digital.");
-        fetchExpedienteSteps();
-      }
-    } catch {
-      setSignatureStatus("Error en la conexión para firmar.");
-    }
-    setSignatureLoading(false);
-  }
-
-  let numUploadedDocs = 0;
-  for (const key of requiredUploadSteps) {
-    const status = (stepStatus && stepStatus[key]) ? stepStatus[key] : {};
-    if (status && status.checklist && status.checklist.fulfilled) numUploadedDocs++;
-  }
-  const adminDocsComplete = requiredAdminSteps.every(
-    key => {
-      const status = (stepStatus && stepStatus[key]) ? stepStatus[key] : {};
-      return !!(status.checklist?.fulfilled || status.document);
-    }
-  );
-  const digitalPhotoDone = !!(stepStatus && stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled);
-  const plantelFulfilled = !!user.plantelId;
-
+  // Calculate completed steps, fulfillment, etc.
+  const steps = userSteps;
   const step = steps[currentStep];
-  const status = stepStatus && typeof stepStatus === "object" && stepStatus[step.key] ? stepStatus[step.key] : {};
-  const historyDocs = (stepHistory && typeof stepHistory === "object" && Array.isArray(stepHistory?.[step.key])) ? stepHistory[step.key] : [];
+  const status = (step.key && stepStatus?.[step.key]) ? stepStatus[step.key] : {};
+  const historyDocs = (step.key && stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs.length ? historyDocs[0] : null;
-  const { checklist, document, signature } = status;
+  const { checklist } = status;
 
-  const canGoNextPlantel = planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
-  const canGoNextPhoto = step.key !== "foto_digital" || digitalPhotoDone;
-  const isCurrentStepFulfilled = step.adminUploadOnly
-    ? ((status && status.checklist && status.checklist.fulfilled) || (status && status.document))
-    : step.signable
-      ? (signature && (signature.status === "signed" || signature.status === "completed"))
-      : (checklist && checklist.fulfilled);
+  // No more signable/admin steps, only regular user files + summary
+  function isCurrentStepFulfilled(curStep) {
+    if (!curStep || !curStep.key) return false;
+    if (curStep.key === "plantel") {
+      return planteles.length > 0 && !!user.plantelId && user.rfc && user.curp && user.email;
+    }
+    if (curStep.key === "foto_digital") {
+      return !!(stepStatus && stepStatus.foto_digital && stepStatus.foto_digital.checklist && stepStatus.foto_digital.checklist.fulfilled);
+    }
+    if (curStep.key === "__expediente_summary__") {
+      return true;
+    }
+    const st = stepStatus && stepStatus[curStep.key];
+    if (!st) return false;
+    return !!(st.checklist && st.checklist.fulfilled);
+  }
 
   const canGoNext =
-    step.key === "plantel"
-      ? canGoNextPlantel
-      : step.key === "foto_digital"
-        ? canGoNextPhoto
-        : (currentStep < totalSteps - 1 && isCurrentStepFulfilled && !uploading && !signatureLoading);
+    currentStep < totalSteps - 1 && isCurrentStepFulfilled(step) && !uploading && !savingPlantel;
 
-  const canGoPrev = currentStep > 0 && !uploading && !signatureLoading;
+  const canGoPrev = currentStep > 0 && !uploading && !savingPlantel;
 
   const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
   const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const stickyTop = "top-16";
-
-  const wizardComplete =
-    numUploadedDocs === requiredUploadSteps.length &&
-    requiredAdminSteps.every(
-      key => {
-        const status = stepStatus && stepStatus[key] ? stepStatus[key] : {};
-        return !!(status.checklist?.fulfilled || status.document);
-      }
-    ) &&
-    digitalPhotoDone &&
-    plantelFulfilled;
 
   if (user && user.role === "employee") {
     return <WelcomeApproved user={user} />;
@@ -327,78 +289,58 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
       </div>
       <section className={wizardCard + " relative mt-0"}>
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
-          <div className="w-14 h-14 relative mb-2">
-            <Image src="/IMAGOTIPO-IECS-IEDIS.png" alt="IECS-IEDIS" fill className="object-contain rounded-xl bg-white/70" />
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="inline-flex items-center text-xl xs:text-2xl md:text-3xl font-extrabold tracking-tight text-purple-900 dark:text-fuchsia-200 mb-0.5 leading-tight">
+          {step.iconKey && iconMap[step.iconKey] && (
+            <div className="w-14 h-14 relative mb-2">
               {(() => {
                 const Icon = iconMap[step.iconKey];
-                return Icon ? <Icon className="h-9 w-9 md:h-11 md:w-11 align-middle inline-block mr-2 -mt-1" aria-hidden="true" /> : null;
+                return <Icon className="h-9 w-9 md:h-11 md:w-11 align-middle inline-block" />;
               })()}
-              <span>{step.label}</span>
             </div>
-            <div className="text-xs xs:text-base md:text-lg text-slate-500 dark:text-slate-300 text-center max-w-[95vw] px-2 font-semibold leading-normal">
-              {step.description}
+          )}
+          {step.key !== "__expediente_summary__" &&
+            <div className="flex flex-col items-center">
+              <div className="inline-flex items-center text-xl xs:text-2xl md:text-3xl font-extrabold tracking-tight text-purple-900 dark:text-fuchsia-200 mb-0.5 leading-tight">
+                <span>{step.label}</span>
+              </div>
+              <div className="text-xs xs:text-base md:text-lg text-slate-500 dark:text-slate-300 text-center max-w-[95vw] px-2 font-semibold leading-normal">
+                {step.description}
+              </div>
             </div>
-          </div>
+          }
         </div>
-        {wizardComplete && (
-          <StepSummary user={user} />
-        )}
-        {!wizardComplete && (
-          <>
-            {step.key === "plantel" ? (
-              <StepPlantelSelection
-                plantelId={user.plantelId}
-                rfc={user.rfc}
-                curp={user.curp}
-                email={user.email}
-                planteles={planteles}
-                loading={loadingData}
-                error={fetchError}
-                onSave={savePlantelCurpRfcEmail}
-                saving={savingPlantel}
-              />
-            ) : step.key === "foto_digital" ? (
-              <StepDigitalPhoto
-                picture={user.picture}
-                onUpload={handlePhotoUpload}
-                uploading={uploading}
-                uploadError={uploadError}
-                uploadSuccess={uploadSuccess}
-              />
-            ) : step.adminUploadOnly ? (
-              <StepSignableDocument
-                type={step.key}
-                status={status || {}}
-                user={user}
-              />
-            ) : !step.signable ? (
-              <StepDocumentUpload
-                latestDoc={latestDoc}
-                documentHistory={historyDocs}
-                uploading={uploading}
-                uploadError={uploadError}
-                uploadSuccess={uploadSuccess}
-                uploadProgress={uploadProgress}
-                onUpload={(file) => handleFileUpload(file, step.key)}
-                accept={step.accept || "application/pdf"}
-              />
-            ) : (
-              <StepSignableDocument
-                type={step.key}
-                status={status || {}}
-                signature={signature}
-                canSign={numUploadedDocs === requiredUploadSteps.length && digitalPhotoDone && plantelFulfilled}
-                handleSign={() => handleSign(step.key)}
-                signatureStatus={signatureStatus}
-                signatureLoading={signatureLoading}
-                onWidgetSuccess={fetchExpedienteSteps}
-                user={user}
-              />
-            )}
-          </>
+        {step.key === "plantel" ? (
+          <StepPlantelSelection
+            plantelId={user.plantelId}
+            rfc={user.rfc}
+            curp={user.curp}
+            email={user.email}
+            planteles={planteles}
+            loading={loadingData}
+            error={fetchError}
+            onSave={savePlantelCurpRfcEmail}
+            saving={savingPlantel}
+          />
+        ) : step.key === "foto_digital" ? (
+          <StepDigitalPhoto
+            picture={user.picture}
+            onUpload={handlePhotoUpload}
+            uploading={uploading}
+            uploadError={uploadError}
+            uploadSuccess={uploadSuccess}
+          />
+        ) : step.key === "__expediente_summary__" ? (
+          <StepExpedienteSummary stepStatus={stepStatus} user={user} />
+        ) : (
+          <StepDocumentUpload
+            latestDoc={latestDoc}
+            documentHistory={historyDocs}
+            uploading={uploading}
+            uploadError={uploadError}
+            uploadSuccess={uploadSuccess}
+            uploadProgress={uploadProgress}
+            onUpload={(file) => handleFileUpload(file, step.key)}
+            accept={step.accept || "application/pdf"}
+          />
         )}
         <div className="flex w-full justify-between items-center pt-10 sm:pt-12 pb-[68px] md:pb-6 gap-3 sticky bottom-0 bg-transparent z-10">
           <button
