@@ -287,7 +287,9 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     className={`flex flex-col p-4 rounded-2xl border shadow-lg gap-2 border-2 ${meta.accent}`}
                   >
                     <div className="flex flex-row gap-2 items-center mb-1">
-                      <meta.icon className="w-6 h-6" />
+                      <span className="flex-shrink-0 flex items-center justify-center">
+                        <meta.icon className="w-6 h-6" />
+                      </span>
                       <span className="font-bold">
                         {checklistLabel(st.key)}
                       </span>
@@ -324,7 +326,9 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   }`}
                 >
                   <div className="flex flex-row gap-2 items-center mb-1">
-                    {Icon}
+                    <span className="flex-shrink-0 flex items-center justify-center">
+                      {Icon}
+                    </span>
                     <span className="font-bold text-cyan-900">{checklistLabel(st.key)}</span>
                   </div>
                   <div className="text-xs text-slate-500">
