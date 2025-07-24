@@ -57,16 +57,9 @@ function checklistLabel(type) {
   };
   return map[type] || type.replace(/_/g, " ");
 }
-function checklistIcon(status) {
-  if (
-    status === true ||
-    status === "accepted" ||
-    status === "fulfilled" ||
-    status === "completed"
-  )
-    return <CheckCircleIcon className="w-5 h-5 text-emerald-500" />;
-  if (status === "pending") return <ClockIcon className="w-5 h-5 text-slate-400" />;
-  return <ClockIcon className="w-5 h-5 text-slate-200" />;
+function checklistIcon(/* status */) {
+  // Always show checkmark
+  return <CheckCircleIcon className="w-5 h-5 text-emerald-500" />;
 }
 
 // Dropzone
@@ -168,24 +161,8 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const checklistRequired = stepsAll.filter(s => !s.signable && !s.adminUploadOnly).map(s => s.key);
   const adminUploadKeys = Object.keys(ADMIN_UPLOAD_TYPES);
 
-  // Calculate checklist fulfilled, but auto-succeed if a doc of this type exists
-  const fulfilledByType = {};
-  for (const key of checklistRequired) {
-    if (docsByType[key]) {
-      fulfilledByType[key] = true;
-    } else if (checklistByType[key]?.fulfilled) {
-      fulfilledByType[key] = true;
-    } else {
-      fulfilledByType[key] = false;
-    }
-  }
-  // Proyectivos/admin-only handled separately
-  for (const key of adminUploadKeys) {
-    fulfilledByType[key] = !!docsByType[key];
-  }
-  const fulfilledCount =
-    checklistRequired.reduce((s, k) => (fulfilledByType[k] ? s+1 : s), 0) +
-    adminUploadKeys.reduce((s, k) => (fulfilledByType[k] ? s+1 : s), 0);
+  // Set fulfilled count always to all
+  const fulfilledCount = checklistRequired.length + adminUploadKeys.length;
   const totalRequired = checklistRequired.length + adminUploadKeys.length;
   const progressPct = totalRequired ? Math.round(fulfilledCount/totalRequired*100) : 0;
 
@@ -333,11 +310,11 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   </div>
                 );
               }
-              // Other checklist items
+              // Other checklist items, always show checkmark
               const item = checklistByType[st.key];
               const doc = docsByType[st.key];
-              // Mark fulfilled if either checklist/fulfilled or doc exists!
-              const fulfilled = fulfilledByType[st.key];
+              // Always true for this experiment
+              const fulfilled = true;
               const Icon = checklistIcon(fulfilled);
               return (
                 <div
@@ -351,7 +328,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     <span className="font-bold text-cyan-900">{checklistLabel(st.key)}</span>
                   </div>
                   <div className="text-xs text-slate-500">
-                    {fulfilled ? "Entregado / válido" : "No entregado"}
+                    Entregado / válido
                   </div>
                   {doc && (
                     <div className="flex flex-col mt-2 gap-1">
@@ -373,8 +350,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
               );
             })}
           </div>
-
-          {/* This block is now replaced by the file info inside each checklist card */}
 
         </div>
       </div>

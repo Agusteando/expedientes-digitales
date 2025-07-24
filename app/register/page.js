@@ -12,9 +12,10 @@ function validatePassword(password) {
   return !!password && password.length >= 7;
 }
 
-// CURP regex (official, post/pre 2000 all valid)
+// CURP regex (official+2024): 4 letters, 2 digits (YY), month MM, day DD, gender, state, 3 consonants, [A-Z0-9] year sign, check digit
 function validCurp(curp) {
-  const regex = /^[A-Z]{4}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[0-9A]\d$/i;
+  const regex =
+    /^[A-Z]{4}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]\d$/i;
   return regex.test(curp ?? "");
 }
 
@@ -26,7 +27,7 @@ function RegisterFormStep({ disabled }) {
     password: "",
     password2: "",
     curp: "",
-    rfc: ""
+    rfc: "",
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const [serverTopError, setServerTopError] = useState("");
@@ -55,7 +56,8 @@ function RegisterFormStep({ disabled }) {
       case "curp":
         if (!val) return "El CURP es obligatorio.";
         if (val.length !== 18) return "El CURP debe tener exactamente 18 caracteres.";
-        if (!validCurp(val || "")) return "El CURP no tiene un formato válido. Ejemplo: GOMC960912HDFRRL04 o SASN040606MMCNNTA8";
+        if (!validCurp(val || ""))
+          return "El CURP no tiene un formato válido. Ejemplo: GOMC960912HDFRRL04, SASN040606MMCNNTA8, o AARA000311MMCLDNB0";
         return "";
       case "rfc":
         if (!val) return "El RFC es obligatorio.";
@@ -110,10 +112,14 @@ function RegisterFormStep({ disabled }) {
       curp: true,
       rfc: true,
     });
-    const firstErrorField = Object.keys(localFieldErrors).find((key) => localFieldErrors[key]);
+    const firstErrorField = Object.keys(localFieldErrors).find(
+      (key) => localFieldErrors[key]
+    );
     if (firstErrorField) {
       setFieldErrors({});
-      setServerTopError(localFieldErrors[firstErrorField] || "Por favor corrige los errores.");
+      setServerTopError(
+        localFieldErrors[firstErrorField] || "Por favor corrige los errores."
+      );
       return;
     }
 
@@ -121,14 +127,14 @@ function RegisterFormStep({ disabled }) {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           email: form.email,
           password: form.password,
           curp: form.curp,
           rfc: form.rfc,
-        })
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -161,7 +167,8 @@ function RegisterFormStep({ disabled }) {
     "La contraseña debe tener al menos 7 caracteres. Puede contener letras, números, signos o símbolos.";
 
   const passwordValid = validatePassword(form.password);
-  const passwordsMatch = !!form.password && !!form.password2 && form.password === form.password2;
+  const passwordsMatch =
+    !!form.password && !!form.password2 && form.password === form.password2;
 
   return (
     <div
@@ -217,11 +224,16 @@ function RegisterFormStep({ disabled }) {
             aria-invalid={!!displayFieldError("name")}
           />
           {displayFieldError("name") && (
-            <div className="text-xs text-red-600 mt-1">{displayFieldError("name")}</div>
+            <div className="text-xs text-red-600 mt-1">
+              {displayFieldError("name")}
+            </div>
           )}
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="email">
+          <label
+            className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+            htmlFor="email"
+          >
             Correo electrónico
           </label>
           <input
@@ -242,12 +254,17 @@ function RegisterFormStep({ disabled }) {
             aria-invalid={!!displayFieldError("email")}
           />
           {displayFieldError("email") && (
-            <div className="text-xs text-red-600 mt-1">{displayFieldError("email")}</div>
+            <div className="text-xs text-red-600 mt-1">
+              {displayFieldError("email")}
+            </div>
           )}
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="curp">
+            <label
+              className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+              htmlFor="curp"
+            >
               CURP
             </label>
             <input
@@ -269,11 +286,16 @@ function RegisterFormStep({ disabled }) {
               aria-invalid={!!displayFieldError("curp")}
             />
             {displayFieldError("curp") && (
-              <div className="text-xs text-red-600 mt-1">{displayFieldError("curp")}</div>
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("curp")}
+              </div>
             )}
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="rfc">
+            <label
+              className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+              htmlFor="rfc"
+            >
               RFC
             </label>
             <input
@@ -295,13 +317,18 @@ function RegisterFormStep({ disabled }) {
               aria-invalid={!!displayFieldError("rfc")}
             />
             {displayFieldError("rfc") && (
-              <div className="text-xs text-red-600 mt-1">{displayFieldError("rfc")}</div>
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("rfc")}
+              </div>
             )}
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="password">
+            <label
+              className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+              htmlFor="password"
+            >
               Contraseña
             </label>
             <div className="relative flex items-center">
@@ -358,11 +385,16 @@ function RegisterFormStep({ disabled }) {
               </div>
             </div>
             {displayFieldError("password") && (
-              <div className="text-xs text-red-600 mt-1">{displayFieldError("password")}</div>
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("password")}
+              </div>
             )}
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="password2">
+            <label
+              className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+              htmlFor="password2"
+            >
               Repetir contraseña
             </label>
             <div className="relative flex items-center">
@@ -418,7 +450,9 @@ function RegisterFormStep({ disabled }) {
               )}
             </div>
             {displayFieldError("password2") && (
-              <div className="text-xs text-red-600 mt-1">{displayFieldError("password2")}</div>
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("password2")}
+              </div>
             )}
           </div>
         </div>
@@ -436,7 +470,9 @@ function RegisterFormStep({ disabled }) {
         )}
       </form>
       <div className="w-full flex flex-col items-center mt-7 text-sm">
-        <span className="text-gray-500 dark:text-gray-400 mb-1">¿Ya tienes cuenta?</span>
+        <span className="text-gray-500 dark:text-gray-400 mb-1">
+          ¿Ya tienes cuenta?
+        </span>
         <a
           href="/empleado"
           className="text-cyan-700 dark:text-cyan-300 font-semibold hover:underline transition"
