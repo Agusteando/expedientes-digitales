@@ -27,8 +27,10 @@
     "next-transpile-modules": "^10.0.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.3.31",
+    "pdfkit": "^0.17.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "stream-buffers": "^3.0.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",

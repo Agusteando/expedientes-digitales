@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 
 async function loadLogoImage() {
-  let filePath = path.join(process.cwd(), "public/IMAGOTIPO-IECS-IEDIS.png");
+  const filePath = path.join(process.cwd(), "public/IMAGOTIPO-IECS-IEDIS.png");
   if (fs.existsSync(filePath)) {
     return new Uint8Array(fs.readFileSync(filePath));
   }
@@ -18,9 +18,33 @@ function safeField(val) {
   return val && String(val).trim().length > 0 ? String(val) : "-";
 }
 
+/**
+ * Clean, production-safe solution for displaying MySQL DATE fields
+ * Always outputs dd/mm/yyyy; never uses JS Date local/UTC parsing.
+ *
+ * @param {string|Date|null} val - The value from Prisma (string 'YYYY-MM-DD' or Date)
+ * @returns {string}            - Formatted date dd/mm/yyyy or "-"
+ */
+function formatDateField(val) {
+  if (!val) return "-";
+  let y, m, d;
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    [y, m, d] = val.split("-").map(Number);
+  } else if (val instanceof Date) {
+    const iso = val.toISOString().slice(0, 10);
+    [y, m, d] = iso.split("-").map(Number);
+  } else {
+    const parts = String(val).slice(0, 10).split("-");
+    [y, m, d] = parts.map(Number);
+  }
+  if (!y || !m || !d) return "-";
+  return `${d.toString().padStart(2,"0")}/${m.toString().padStart(2,"0")}/${y}`;
+}
+
 export async function GET(req, context) {
   const params = await context.params;
   const session = await getSessionFromCookies(req.cookies);
+
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     return new NextResponse("No autorizado", { status: 403 });
   }
@@ -31,15 +55,24 @@ export async function GET(req, context) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      id: true, name: true, email: true, picture: true, role: true,
-      rfc: true, curp: true, domicilioFiscal: true, nss: true,
-      fechaIngreso: true, puesto: true, horarioLaboral: true,
+      id: true,
+      name: true,
+      email: true,
+      picture: true,
+      role: true,
+      rfc: true,
+      curp: true,
+      domicilioFiscal: true,
+      nss: true,
+      fechaIngreso: true,
+      puesto: true,
+      horarioLaboral: true,
       plantel: { select: { name: true, label: true } },
     }
   });
   if (!user) return new NextResponse("Usuario no encontrado", { status: 404 });
 
-  // Page: A4 portrait, 595 x 842
+  // A4 portrait: 595 x 842
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]);
   const { width, height } = page.getSize();
@@ -48,11 +81,10 @@ export async function GET(req, context) {
   const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontItal = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  // Header con logo y título
+  // Header/Logo/Title
   const logoMargin = 32;
   const logoH = 68, logoW = 68;
   let y = height - 58;
-
   try {
     const logoData = await loadLogoImage();
     const pngLogo = await pdfDoc.embedPng(logoData);
@@ -64,7 +96,6 @@ export async function GET(req, context) {
     });
   } catch {}
 
-  // Título
   page.drawText("IECS-IEDIS", {
     x: logoMargin + logoW + 14,
     y: y - 10,
@@ -88,10 +119,9 @@ export async function GET(req, context) {
     color: rgb(0.13, 0.39, 0.70)
   });
 
-  // Más espacio entre bloques (separación extra)
   y -= 92;
 
-  // ----- BLOQUE 1: Nombre/correo/plantel/puesto -----
+  // Block 1: Name/email/plantel/puesto
   page.drawText("Nombre:", { x: 50, y, font: fontTitle, size: 14, color: rgb(0.12,0.3,0.4) });
   page.drawText(safeField(user.name), { x: 140, y, font: fontReg, size: 14 });
   y -= 27;
@@ -104,12 +134,12 @@ export async function GET(req, context) {
   page.drawText("Puesto:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.11,0.31,0.44)});
   page.drawText(safeField(user.puesto), { x: 140, y, font: fontReg, size: 13 });
 
-  // Bloque extra espacio
   y -= 36;
-  // ----- BLOQUE 2: Ingreso, horario, ID -----
+
+  // Block 2: Ingreso, horario
   page.drawText("Fecha de ingreso:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.12,0.33,0.53)});
   page.drawText(
-    user.fechaIngreso ? new Date(user.fechaIngreso).toLocaleDateString("es-MX") : "-",
+    formatDateField(user.fechaIngreso),
     { x: 173, y, font: fontReg, size: 13 }
   );
   y -= 27;
@@ -117,7 +147,7 @@ export async function GET(req, context) {
   page.drawText(safeField(user.horarioLaboral), { x: 140, y, font: fontReg, size: 13 });
   y -= 39;
 
-  // ----- BLOQUE 3: RFC, CURP, NSS -----
+  // Block 3: RFC, CURP, NSS
   page.drawText("RFC:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.20,0.12,0.31)});
   page.drawText(safeField(user.rfc), { x: 110, y, font: fontReg, size: 12 });
   y -= 24;
@@ -127,28 +157,22 @@ export async function GET(req, context) {
   page.drawText("NSS:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.20,0.12,0.31) });
   page.drawText(safeField(user.nss), { x: 110, y, font: fontReg, size: 12 });
 
-  // Más espacio antes de domicilio
   y -= 42;
-  // ----- BLOQUE 4: Domicilio fiscal -----
+
+  // Block 4: Domicilio fiscal
   page.drawText("Domicilio fiscal:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.21,0.38,0.67) });
   page.drawText(safeField(user.domicilioFiscal), { x: 160, y, font: fontItal, size: 12, maxWidth: width-170 });
 
-  // Línea divisora fin de datos
   y -= 56;
   page.drawRectangle({
     x: 38, y, width: width - 76, height: 1.2, color: rgb(0.77, 0.85, 0.97)
   });
 
-  // -- FIRMAS (abajo de la hoja: 3, bien distribuidas y con etiquetas) --
-  //
-  //   Dirección      Administración     Coordinación general
-  // Cada una una línea de firma, etiqueta centrada debajo.
-
+  // Firmas (bottom)
   const firmasY = 110;
   const firmaW = 140;
   const gap = (width - 3*firmaW) / 4;
 
-  // Dirección (izquierda)
   page.drawLine({
     start: { x: gap, y: firmasY },
     end:   { x: gap+firmaW, y: firmasY },
@@ -160,7 +184,6 @@ export async function GET(req, context) {
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
 
-  // Administración (centro)
   const adminX = gap*2+firmaW;
   page.drawLine({
     start: { x: adminX, y: firmasY },
@@ -173,7 +196,6 @@ export async function GET(req, context) {
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
 
-  // Coordinación general (derecha)
   const coordX = gap*3+firmaW*2;
   page.drawLine({
     start: { x: coordX, y: firmasY },
@@ -186,7 +208,6 @@ export async function GET(req, context) {
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
 
-  // Footer
   page.drawRectangle({
     x: 0, y: 0, width, height: 32,
     color: rgb(0.11,0.31,0.60), opacity: 0.13
