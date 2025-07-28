@@ -12,7 +12,7 @@ import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixC
 import AdminInicioClient from "@/components/admin/AdminInicioClient";
 import { stepsExpediente } from "@/components/stepMetaExpediente";
 
-// Only non-admin-upload, non-plantel steps (i.e., strictly user-uploaded docs)
+// Only non-admin-upload, non-plantel steps (i.e. strictly user-uploaded docs)
 const userChecklistKeys = stepsExpediente.filter(
   s => !s.adminUploadOnly && !s.isPlantelSelection
 ).map(s => s.key);
@@ -52,57 +52,68 @@ export default async function AdminInicioPage({ searchParams }) {
     plantelesScoped = planteles.filter(p => scopedPlantelIds.includes(p.id));
   }
 
-  // Only count non-admin users for KPIs
-  let users = await prisma.user.findMany({
+  // --- MAIN PATCH: fetch extra info for ALL users so client can calculate progress like drawer ---
+
+  // Only count non-admin users for KPIs (add all relevant fields)
+  let usersRaw = await prisma.user.findMany({
     where: {
       role: { in: ["employee", "candidate"] },
       ...(session.role === "admin" ? { plantelId: { in: scopedPlantelIds } } : {})
     },
     select: {
       id: true, name: true, email: true, picture: true, role: true, isApproved: true, plantelId: true, isActive: true,
+      evaId: true, pathId: true, // required fields for checklist
+      // checklistItems: to be loaded below
+      // documents: to be loaded below
     },
     orderBy: { name: "asc" }
   });
+  const userIds = usersRaw.map(u => u.id);
 
-  const userIds = users.map(u => u.id);
-
+  // Defensive for admin: filter strictly
   if (session.role === "admin") {
-    users = users.filter(u => u.plantelId && scopedPlantelIds.includes(u.plantelId));
+    usersRaw = usersRaw.filter(u => u.plantelId && scopedPlantelIds.includes(u.plantelId));
   }
 
-  // Fetch all checklist items for non-admin users
+  // Fetch all checklistItems for non-admin users
   const allChecklist = await prisma.checklistItem.findMany({
     where: { userId: { in: userIds }, required: true },
     select: { id: true, userId: true, fulfilled: true, type: true }
   });
-
-  // Build user checklist map and completion status
   const byUserChecklist = {};
   for (const c of allChecklist) {
     (byUserChecklist[c.userId] ||= []).push(c);
   }
 
-  // For admin completion: proyectivos only
-  const userDocs = await prisma.document.findMany({
+  // Fetch all user docs (need type, status, filePath, version, uploadedAt)
+  const allDocs = await prisma.document.findMany({
     where: { userId: { in: userIds } },
-    select: { id: true, userId: true, type: true, status: true }
+    select: { id: true, userId: true, type: true, status: true, filePath: true, version: true, uploadedAt: true }
   });
+  // Map last version per type per user
+  const byUserDocsLatest = {};
+  for (const doc of allDocs.sort((a, b) => (b.version || 1) - (a.version || 1))) {
+    if (!byUserDocsLatest[doc.userId]) byUserDocsLatest[doc.userId] = {};
+    if (!byUserDocsLatest[doc.userId][doc.type]) byUserDocsLatest[doc.userId][doc.type] = doc;
+  }
+
+  // For admin completion: proyectivos only (mostly for approval button)
   const projByUser = {};
-  for (const d of userDocs) {
+  for (const d of allDocs) {
     if (d.type === "proyectivos" && d.status === "ACCEPTED") {
       projByUser[d.userId] = true;
     }
   }
 
-  // USERS/EXP. DIGITALES KPIs
-  const totalUsers = users.length; // true non-admin user total!
+  // KPIs, use digitalComplete & proyectivos
+  const totalUsers = usersRaw.length;
   let userDocsCompleted = 0;
   let expedientesValidados = 0;
-  users.forEach(u => {
+  usersRaw.forEach(u => {
     const checklist = byUserChecklist[u.id] || [];
     const digitalComplete = isUserExpedienteDigitalComplete(checklist);
     if (digitalComplete) userDocsCompleted++;
-    if (digitalComplete && !!projByUser[u.id]) expedientesValidados++; // only if user digital AND admin proyectivos
+    if (digitalComplete && !!projByUser[u.id]) expedientesValidados++;
   });
   const percentDigitalExpedientes = totalUsers === 0 ? 0 : Math.round((userDocsCompleted / totalUsers) * 100);
   const percentFinalExpedientes = totalUsers === 0 ? 0 : Math.round((expedientesValidados / totalUsers) * 100);
@@ -118,10 +129,30 @@ export default async function AdminInicioPage({ searchParams }) {
     });
   }
 
-  // Recalculate proper per-plantel progress structure, using userDocsCompleted and expedientesValidados logic:
+  // Stitch together checklist status info for each user for progress calculation
+  const users = usersRaw.map(u => {
+    // For a correct progress bar checklist, we provide:
+    // checklistByType: type->ChecklistItem ({fulfilled}), hasProyectivos (true/false)
+    // Also, expose all docsByType for future extension (drawer uses more)
+    const checklistItems = byUserChecklist[u.id] || [];
+    const checklistByType = {};
+    checklistItems.forEach(it => { checklistByType[it.type] = it; });
+
+    const docsByType = byUserDocsLatest[u.id] || {};
+
+    return {
+      ...u,
+      checklistByType,
+      hasProyectivos: !!docsByType.proyectivos,
+      documentsByType: docsByType,
+      // Also pass hasProyectivosAccepted for finer logic (could be used later):
+      hasProyectivosAccepted: !!projByUser[u.id],
+    };
+  });
+
+  // Plantel stats panels remain as before
   const usedPlantelIds = new Set(users.map(u => u.plantelId).filter(Boolean));
   const filteredPlanteles = plantelesScoped.filter(p => usedPlantelIds.has(p.id));
-
   const plantelProgressData = filteredPlanteles.map(p => {
     const employees = users.filter(u => u.plantelId === p.id);
     const userDocsGood = employees.filter(u => isUserExpedienteDigitalComplete(byUserChecklist[u.id] || [])).length;
