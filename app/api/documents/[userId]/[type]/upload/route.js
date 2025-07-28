@@ -9,8 +9,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextauth-options";
 
 /**
- * Handles expediente document upload, versioned, never deletes old versions, supports auto-accept/fulfilled.
- * DEFENSIVE: Always converts IDs to int for DB; uses string for session match.
+ * Handles expediente document upload, versioned, never deletes old versions,
+ * supports auto-accept/fulfilled. Robustly supports reupload and keeps checklist atomic.
  */
 export async function POST(req, context) {
   const params = await context.params;
@@ -31,7 +31,6 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  // Use String comparison for session vs route param match, but ONLY use int for DB
   if (
     (session.user.role === "employee" || session.user.role === "candidate") &&
     String(session.user.id) !== String(userIdInt)
@@ -77,7 +76,7 @@ export async function POST(req, context) {
   });
   const nextVersion = latest ? latest.version + 1 : 1;
 
-  // Create Document (never delete any!)
+  // Create new document record (append versioning)
   const doc = await prisma.document.create({
     data: {
       userId: userIdInt,
@@ -88,13 +87,20 @@ export async function POST(req, context) {
     }
   });
 
-  // ChecklistItem linkage (fulfilled immediately for UX, or false if you want admin review)
-  const item = await prisma.checklistItem.create({
-    data: {
+  // ChecklistItem linkage: Create if missing, else update with latest document and set fulfilled.
+  // Handles user reuploads safely and supports versioning.
+  const checklistUnique = { userId_type: { userId: userIdInt, type } };
+  await prisma.checklistItem.upsert({
+    where: checklistUnique,
+    update: {
+      fulfilled: true,
+      documentId: doc.id
+    },
+    create: {
       userId: userIdInt,
       type,
       required: true,
-      fulfilled: true, // set to false if you want admin review before showing as completed
+      fulfilled: true,
       documentId: doc.id
     }
   });
@@ -103,6 +109,6 @@ export async function POST(req, context) {
     ok: true,
     id: doc.id,
     filePath: doc.filePath,
-    checklistItemId: item.id,
+    checklistItemId: doc.id,
   });
 }
