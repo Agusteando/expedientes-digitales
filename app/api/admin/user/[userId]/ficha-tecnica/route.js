@@ -5,38 +5,45 @@ import { getSessionFromCookies } from "@/lib/auth";
 
 export async function PATCH(req, context) {
   const params = await context.params;
+  const { userId } = params;
   const session = await getSessionFromCookies(req.cookies);
-  if (!session || !["superadmin", "admin"].includes(session.role)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if(!session || (session.role !== "admin" && session.role !== "superadmin")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
-  const userId = Number(params.userId);
   let data;
-  try {
-    data = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  // Accept nss and all ficha fields
-  const {
-    rfc, curp, domicilioFiscal, nss, fechaIngreso, puesto, horarioLaboral, plantelId
-  } = data;
+  try { data = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  try {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        rfc: rfc ?? null,
-        curp: curp ?? null,
-        domicilioFiscal: domicilioFiscal ?? null,
-        nss: nss ?? null,
-        fechaIngreso: fechaIngreso ? new Date(fechaIngreso) : null,
-        puesto: puesto ?? null,
-        horarioLaboral: horarioLaboral ?? null,
-        plantelId: plantelId ? Number(plantelId) : null,
-      }
-    });
-    return NextResponse.json({ ok: true, ficha: user });
-  } catch (e) {
-    return NextResponse.json({ error: e.message || "Error" }, { status: 500 });
+  const safeFields = [
+    "rfc", "curp", "domicilioFiscal", "fechaIngreso",
+    "puesto", "horarioLaboral", "plantelId", "nss"
+  ];
+
+  const nextData = {};
+  for(const key of safeFields) {
+    if(Object.prototype.hasOwnProperty.call(data, key)) nextData[key] = data[key];
   }
+
+  // Load prev user
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+    select: { role: true, fechaIngreso: true }
+  });
+
+  // Convert empty fechaIngreso (from forms) to null
+  if (nextData.fechaIngreso === "") nextData.fechaIngreso = null;
+
+  // If fechaIngreso is being set and role is candidate, update to employee
+  if (
+    nextData.fechaIngreso &&
+    user.role === "candidate"
+  ) {
+    nextData.role = "employee";
+  }
+
+  await prisma.user.update({
+    where: { id: Number(userId) },
+    data: nextData
+  });
+
+  return NextResponse.json({ ok: true });
 }
