@@ -128,6 +128,8 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const [uploading, setUploading] = useState({});
   const [uploadSuccess, setUploadSuccess] = useState({});
   const [uploadError, setUploadError] = useState({});
+  // UI state for proyectivos upload block
+  const [showProyDropzone, setShowProyDropzone] = useState(false);
 
   useEffect(() => {
     async function loadDocs() {
@@ -136,6 +138,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
       const r = await fetch(`/api/admin/user/${user.id}/docs`);
       const d = await r.json();
       setDocs(d); setLoading(false); setPending({});
+      setShowProyDropzone(false); // Always reset on open/reload
     }
     loadDocs();
   }, [open, user]);
@@ -157,6 +160,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
         setUploadSuccess(s => ({ ...s, [type]: "¡Subido correctamente!" }));
         setTimeout(() => setUploadSuccess(s => ({ ...s, [type]: "" })), 1200);
         setPending(f => ({ ...f, [type]: undefined }));
+        setShowProyDropzone(false); // Hide dropzone on success
         setLoading(true);
         const fresh = await fetch(`/api/admin/user/${user.id}/docs`).then(r => r.json());
         setDocs(fresh); setLoading(false);
@@ -235,13 +239,13 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             <div className="text-[10px]">{user.role === "employee" ? "Empleado" : "Candidato"}</div>
           </div>
         </div>
-        {/* -- Upload proyectivos block (always shown, must be admin) -- */}
+        {/* -- Upload proyectivos block -- */}
         <div className="px-5 pt-6 pb-2 flex flex-col gap-4">
           <div className="border-2 bg-purple-50 border-purple-300 rounded-xl p-4 w-full flex flex-col gap-2">
             <div className="flex items-center gap-2 font-bold text-base mb-1 text-purple-900">
               <ShieldExclamationIcon className="w-7 h-7 text-purple-500" /> Proyectivos (admin)
             </div>
-            {docsByType.proyectivos && (
+            {docsByType.proyectivos && !showProyDropzone && (
               <div className="flex flex-col gap-0.5 mb-1">
                 <div className="flex items-center gap-3">
                   <span className="font-mono font-semibold text-xs">{docsByType.proyectivos.filePath.split("/").pop()}</span>
@@ -250,18 +254,42 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   >
                     <ArrowDownTrayIcon className="w-4 h-4" /> Descargar
                   </a>
+                  <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 text-xs border border-emerald-200 font-bold rounded-full">
+                    <CheckCircleIcon className="w-4 h-4" />¡Completado!
+                  </span>
                 </div>
                 <div className="text-xs text-slate-500">
                   Subido el {formatDateDisplay(docsByType.proyectivos.uploadedAt)}
                 </div>
               </div>
             )}
-            <div className="text-xs text-purple-700 font-semibold mb-1">Sólo administrador puede subir este archivo.</div>
-            <UploadDropzone
-              onFile={file => { setPending(f=>({...f, ["proyectivos"]:file})); setUploadError(e=>({...e,["proyectivos"]:""})); setUploadSuccess(s=>({...s,["proyectivos"]:""})); }}
-              accept="application/pdf,image/*"
-              disabled={uploading["proyectivos"]}
-            />
+            {docsByType.proyectivos && !showProyDropzone && (
+              <button
+                className="mt-2 inline-flex items-center gap-2 px-4 py-1.5 bg-purple-700 hover:bg-purple-900 text-white rounded-full font-bold text-xs"
+                onClick={() => setShowProyDropzone(true)}
+                type="button"
+              >
+                <ArrowUpTrayIcon className="w-4 h-4" />
+                Volver a subir proyectivos
+              </button>
+            )}
+            {/* Dropzone only shown if not uploaded or is in showProyDropzone mode */}
+            {(!docsByType.proyectivos || showProyDropzone) && (
+              <>
+                <UploadDropzone
+                  onFile={file => { setPending(f=>({...f, ["proyectivos"]:file})); setUploadError(e=>({...e,["proyectivos"]:""})); setUploadSuccess(s=>({...s,["proyectivos"]:""})); }}
+                  accept="application/pdf,image/*"
+                  disabled={uploading["proyectivos"]}
+                />
+                {(docsByType.proyectivos && showProyDropzone) && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowProyDropzone(false); setPending(f=>({...f,["proyectivos"]:undefined})); }}
+                    className="text-xs font-bold text-slate-600 hover:text-purple-800 mt-2"
+                  >Cancelar</button>
+                )}
+              </>
+            )}
             {pending["proyectivos"] && (
               <div className="flex flex-row items-center gap-2 mt-2">
                 <span className="text-xs text-slate-700">Archivo listo: <b>{pending["proyectivos"].name}</b></span>
@@ -272,7 +300,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   disabled={uploading["proyectivos"]}
                 >
                   <ArrowUpTrayIcon className="w-5 h-5" />
-                  {docsByType.proyectivos ? "Volver a subir" : "Subir"}
+                  Subir
                 </button>
               </div>
             )}
@@ -348,7 +376,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                       </span>
                     </div>
                   )}
-                  {/* meta.admin => explicit admin-uploaded (if not fulfilled, show only label) */}
                   {meta?.admin && !item.doc && (
                     <span className="text-xs font-medium bg-purple-200 text-purple-900 py-1 rounded-full px-3 inline-block mt-1 border border-purple-400 shadow">
                       <ShieldExclamationIcon className="w-4 h-4 inline -mt-1 mr-1 text-purple-600" />
@@ -368,7 +395,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     {item.fulfilled
                       ? <CheckCircleIcon className="w-4 h-4" />
                       : <ClockIcon className="w-4 h-4" />}
-                    {item.fulfilled ? "Entregado/completo" : "Falta"}
+                    {item.key === "proyectivos" && item.fulfilled ? "¡Completado!" : item.fulfilled ? "Entregado/completo" : "Falta"}
                   </span>
                 </div>
               );
