@@ -5,14 +5,12 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   CheckCircleIcon,
-  CloudArrowDownIcon,
-  DocumentCheckIcon,
+  ShieldExclamationIcon,
   ClockIcon,
   ArrowUpTrayIcon,
   ArrowDownTrayIcon,
   XMarkIcon,
   DocumentTextIcon,
-  ShieldExclamationIcon,
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "../stepMetaExpediente";
 
@@ -334,7 +332,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     </span>
                     <span className="font-bold">{checklistLabel(item.key)}</span>
                   </div>
-                  {(item.type === "doc" && item.doc) && (
+                  {(item.key === "proyectivos") && item.doc && (
                     <div className="flex flex-col mt-1 gap-1">
                       <a
                         href={item.doc.filePath}
@@ -343,15 +341,15 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                         className="flex items-center gap-2 border border-cyan-200 px-3 py-1 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs w-fit"
                       >
                         <ArrowDownTrayIcon className="w-4 h-4" />
-                        Descargar documento
+                        Descargar archivo
                       </a>
                       <span className="text-xs text-slate-400">
                         Subido el {formatDateDisplay(item.doc.uploadedAt)}
                       </span>
                     </div>
                   )}
-                  {/* meta.admin => explicit admin-uploaded */}
-                  {meta?.admin && (
+                  {/* meta.admin => explicit admin-uploaded (if not fulfilled, show only label) */}
+                  {meta?.admin && !item.doc && (
                     <span className="text-xs font-medium bg-purple-200 text-purple-900 py-1 rounded-full px-3 inline-block mt-1 border border-purple-400 shadow">
                       <ShieldExclamationIcon className="w-4 h-4 inline -mt-1 mr-1 text-purple-600" />
                       Sólo administrador puede subir
