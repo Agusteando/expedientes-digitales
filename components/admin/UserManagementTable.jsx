@@ -1,6 +1,48 @@
 
 "use client";
 import UserRow from "./UserRow";
+import { stepsExpediente } from "../stepMetaExpediente";
+
+// List of keys for user-uploaded docs
+const DOC_KEYS = stepsExpediente.filter(s => !s.isPlantelSelection && !s.adminUploadOnly).map(s => s.key);
+
+export const CHECKLIST_KEYS = [
+  ...DOC_KEYS,         // 11 user upload
+  "proyectivos",       // always required, admin uploads
+  "evaId",             // now named Evaluatest in UI
+  "pathId",            // now named PATH in UI
+];
+
+export function getUserChecklistProgress(user) {
+  let done = 0;
+  let checklist = [];
+
+  for (let k of DOC_KEYS) {
+    const fulfilled = (user.checklistByType?.[k] && user.checklistByType[k].fulfilled) || false;
+    checklist.push({ key: k, type: "doc", fulfilled });
+    if (fulfilled) done++;
+  }
+
+  // Always show proyectivos (admin upload), style with type "admin-doc"
+  const proyectivosUploaded = !!user.hasProyectivos;
+  checklist.push({ key: "proyectivos", type: "admin-doc", fulfilled: proyectivosUploaded });
+  if (proyectivosUploaded) done++;
+
+  // "Evaluatest" field (evaId)
+  const evaIdDone = !!user.evaId;
+  checklist.push({ key: "evaId", type: "field", fulfilled: evaIdDone });
+  if (evaIdDone) done++;
+
+  // "PATH" field (pathId)
+  const pathIdDone = !!user.pathId;
+  checklist.push({ key: "pathId", type: "field", fulfilled: pathIdDone });
+  if (pathIdDone) done++;
+
+  const total = CHECKLIST_KEYS.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+
+  return { done, total, pct, checklist };
+}
 
 export default function UserManagementTable({
   users,
@@ -37,7 +79,7 @@ export default function UserManagementTable({
             <th className="px-2 py-2">Usuario</th>
             <th className="px-2 py-2">Plantel</th>
             <th className="px-2 py-2">Estatus</th>
-            <th className="px-2 py-2">Status</th>
+            <th className="px-2 py-2">Progreso docs</th>
             <th className="px-2 py-2">Documentos</th>
             <th className="px-2 py-2">Acción</th>
           </tr>
@@ -64,6 +106,7 @@ export default function UserManagementTable({
               onFichaTecnica={onFichaTecnica}
               onSetActive={onSetActive}
               onDelete={onDelete}
+              getUserChecklistProgress={getUserChecklistProgress}
             />
           ))}
         </tbody>

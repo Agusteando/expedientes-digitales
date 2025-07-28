@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircleIcon, EyeIcon, ClipboardDocumentListIcon, TrashIcon, PowerIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import { getUserChecklistProgress } from "./UserManagementTable";
 
 export default function UserRow({
   user,
@@ -17,7 +18,8 @@ export default function UserRow({
   onDocs,
   onFichaTecnica,
   onSetActive,
-  onDelete // undefined unless superadmin
+  onDelete,
+  getUserChecklistProgress: customChecklistProgress // injected function prop for DRY
 }) {
   const [confirmAction, setConfirmAction] = useState(null);
 
@@ -35,6 +37,9 @@ export default function UserRow({
 
   const canToggleActive = role === "superadmin" ||
     (role === "admin" && user.plantelId && adminsPlanteles.includes(user.plantelId) && user.id !== undefined);
+
+  // Progress bar logic: now always 14 items
+  const progress = (customChecklistProgress || getUserChecklistProgress)(user);
 
   return (
     <tr className={`${selected ? "bg-cyan-50" : ""} ${!isActive ? "opacity-60 bg-gray-100" : ""}`}>
@@ -94,25 +99,29 @@ export default function UserRow({
       <td className="px-2 py-2">
         {statusBadge}
       </td>
-      <td className="px-2 py-2">
-        {user.role === "employee"
-          ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 font-bold text-emerald-800 rounded-full text-xs">
-              <CheckCircleIcon className="w-4 h-4" />Empleado
-            </span>
-          )
-          : user.readyForApproval
-            ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-50 border border-cyan-200 font-bold text-cyan-800 rounded-full text-xs">
-              <CheckCircleIcon className="w-4 h-4" />Listo para aprobar
-            </span>
-          )
-            : (
-                <span className="inline-block px-2 py-1 bg-yellow-50 border border-yellow-100 text-yellow-700 text-xs rounded-full font-bold">
-                  Incompleto
-                </span>
-              )
-        }
+      {/* --- Progress bar for 14 checklist items --- */}
+      <td className="px-2 py-2 min-w-[150px] align-middle">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative min-w-[72px] max-w-[120px]">
+            <div className="w-full h-2 rounded-full bg-cyan-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  progress.pct >= 100
+                    ? "bg-emerald-400"
+                    : progress.pct > 50
+                    ? "bg-cyan-400"
+                    : "bg-yellow-400"
+                }`}
+                style={{ width: `${progress.pct}%` }}
+              ></div>
+            </div>
+          </div>
+          <span className="text-xs font-mono font-bold text-slate-700">{progress.done}/{progress.total}</span>
+          {progress.pct === 100
+            ? <span className="ml-2 text-emerald-800 flex items-center gap-0.5"><CheckCircleIcon className="w-4 h-4" />Listo</span>
+            : <span className="ml-2 text-slate-500 text-xs">En progreso</span>
+          }
+        </div>
       </td>
       <td className="px-2 py-2 flex flex-row gap-1 items-center">
         <button
