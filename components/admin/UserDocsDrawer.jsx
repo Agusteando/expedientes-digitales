@@ -248,7 +248,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             {docsByType.proyectivos && !showProyDropzone && (
               <div className="flex flex-col gap-0.5 mb-1">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono font-semibold text-xs">{docsByType.proyectivos.filePath.split("/").pop()}</span>
                   <a href={docsByType.proyectivos.filePath} target="_blank" rel="noopener"
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-cyan-100 text-cyan-700 border border-cyan-200"
                   >
@@ -360,18 +359,19 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     </span>
                     <span className="font-bold">{checklistLabel(item.key)}</span>
                   </div>
-                  {(item.key === "proyectivos") && item.doc && (
-                    <div className="flex flex-col mt-1 gap-1">
+                  {/* Download block for any checklist item with a document */}
+                  {item.doc && (
+                    <div className="flex items-center gap-2 flex-wrap mt-2">
                       <a
                         href={item.doc.filePath}
                         target="_blank"
                         rel="noopener"
-                        className="flex items-center gap-2 border border-cyan-200 px-3 py-1 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs w-fit"
+                        className="flex items-center px-3 py-1 border border-cyan-200 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs"
                       >
-                        <ArrowDownTrayIcon className="w-4 h-4" />
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
                         Descargar archivo
                       </a>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-500">
                         Subido el {formatDateDisplay(item.doc.uploadedAt)}
                       </span>
                     </div>
@@ -382,7 +382,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                       Sólo administrador puede subir
                     </span>
                   )}
-                  {/* meta.field => system field */}
                   {meta?.field && (
                     <div className="text-xs text-blue-800 flex items-center gap-2 mb-1">
                       {item.fulfilled
@@ -391,11 +390,14 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                       }
                     </div>
                   )}
+                  {/* Single completion chip, visually after other information */}
                   <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
                     {item.fulfilled
                       ? <CheckCircleIcon className="w-4 h-4" />
                       : <ClockIcon className="w-4 h-4" />}
-                    {item.key === "proyectivos" && item.fulfilled ? "¡Completado!" : item.fulfilled ? "Entregado/completo" : "Falta"}
+                    {item.fulfilled
+                      ? (item.key === "proyectivos" ? "¡Completado!" : "Entregado/completo")
+                      : "Falta"}
                   </span>
                 </div>
               );
