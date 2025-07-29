@@ -11,6 +11,7 @@ import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
 import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixCrudClient";
 import AdminInicioClient from "@/components/admin/AdminInicioClient";
 import { stepsExpediente } from "@/components/stepMetaExpediente";
+import { LightBulbIcon } from "@heroicons/react/24/solid";
 
 // Only non-admin-upload, non-plantel steps (i.e. strictly user-uploaded docs)
 const userChecklistKeys = stepsExpediente.filter(
@@ -178,6 +179,20 @@ export default async function AdminInicioPage({ searchParams }) {
     <AdminInicioClient session={session} showSidebar={session.role === "superadmin"}>
       <AdminNav session={session} />
       <main className="flex-1 flex flex-col gap-8 w-full min-w-0 max-w-full pt-24 md:pt-28 pb-6 md:pb-12">
+        <section className="w-full max-w-screen-xl mx-auto px-2 sm:px-4 md:px-7 mb-5">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 bg-yellow-50 border-l-4 border-yellow-400 px-4 py-3 rounded shadow-sm">
+              <LightBulbIcon className="w-7 h-7 text-yellow-400 animate-pulse flex-shrink-0" />
+              <div>
+                <span className="font-bold text-yellow-900">Tip:</span>{" "}
+                <span className="text-yellow-800">
+                  Ahora el estatus de <b>Empleado</b> se asigna automáticamente en cuanto el campo <b>Fecha de ingreso</b> está presente.<br />
+                  No es necesario "aprobar" candidatos manualmente. ¡Más sencillo y rápido!
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
         <section id="dashboard-stats" className="w-full max-w-screen-xl mx-auto px-2 sm:px-4 md:px-7 mb-7">
           <AdminDashboardStats
             summary={{

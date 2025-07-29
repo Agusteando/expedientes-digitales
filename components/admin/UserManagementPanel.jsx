@@ -99,20 +99,7 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  async function handleApproveCandidate(userId) {
-    setFeedback({ type: "info", message: "Aprobando..." });
-    try {
-      const res = await fetch(`/api/admin/user/${userId}/approve`, {
-        method: "POST"
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Error de servidor");
-      setFeedback({ type: "success", message: "Aprobado correctamente" });
-      setTimeout(() => setFeedback({ type: null, message: "" }), 1100);
-      window.location.reload();
-    } catch (e) {
-      setFeedback({ type: "error", message: String(e.message || e) });
-    }
-  }
+  // Remove approve
   async function handleBulkAssign(plantelId) {
     setFeedback({ type: "info", message: "Asignando en lote..." });
     try {
@@ -129,28 +116,8 @@ export default function UserManagementPanel({
       setFeedback({ type: "error", message: String(e.message || e) });
     }
   }
-  // Receive eligible IDs (from BulkActionBar)
-  async function handleBulkApprove(eligibleUserIds) {
-    if (!eligibleUserIds || !eligibleUserIds.length) {
-      setFeedback({ type: "error", message: "Ningún usuario seleccionado cumple requisitos." });
-      return;
-    }
-    setFeedback({ type: "info", message: "Aprobando..." });
-    try {
-      const res = await fetch(`/api/admin/users/bulk-approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userIds: eligibleUserIds })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error de servidor");
-      setFeedback({ type: "success", message: (data.approved?.length || 0) + " usuarios aprobados" });
-      setTimeout(() => setFeedback({ type: null, message: "" }), 1100);
-      window.location.reload();
-    } catch (e) {
-      setFeedback({ type: "error", message: String(e.message || e) });
-    }
-  }
+  // Removed handleBulkApprove and handleApproveCandidate
+
   // Activate/deactivate single
   async function handleSetActive(userId, isActive) {
     setFeedback({ type: "info", message: isActive ? "Activando..." : "Dando de baja..." });
@@ -315,7 +282,6 @@ export default function UserManagementPanel({
         onSelectUser={handleSelectUser}
         onSelectAll={handleSelectAll}
         onAssignPlantel={handleAssignPlantel}
-        onApproveCandidate={handleApproveCandidate}
         onDocs={handleOpenDocs}
         onFichaTecnica={handleOpenFichaTecnica}
         onSetActive={handleSetActive}
@@ -330,8 +296,8 @@ export default function UserManagementPanel({
         allSelected={allSelected}
         canAssignPlantel={canAssignPlantel}
         onBulkAssign={handleBulkAssign}
-        onBulkApprove={handleBulkApprove}
         onBulkSetActive={handleBulkSetActive}
+        // bulk approve removed
       />
       <UserDocsDrawer
         open={docsDrawer.open}

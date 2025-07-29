@@ -14,7 +14,6 @@ export default function UserRow({
   canAssignPlantel,
   onSelect,
   onAssignPlantel,
-  onApproveCandidate,
   onDocs,
   onFichaTecnica,
   onSetActive,
@@ -27,7 +26,6 @@ export default function UserRow({
   function canAdminAssignTo(pid) {
     return role === "superadmin" || adminsPlanteles.includes(pid);
   }
-  const canBeApproved = user.role === "candidate" && user.readyForApproval && isActive;
   const canDelete = role === "superadmin" && typeof onDelete === "function" && user.id !== undefined;
 
   let statusBadge =
@@ -123,9 +121,9 @@ export default function UserRow({
           }
         </div>
       </td>
-      <td className="px-2 py-2 flex flex-row gap-1 items-center">
+      <td className="px-2 py-2 flex flex-row gap-2 items-center">
         <button
-          className="hover:bg-cyan-100 px-2 py-1 rounded-full"
+          className="hover:bg-cyan-100 px-2 py-1 rounded-full transition"
           onClick={() => onDocs(user)}
           aria-label="Ver documentos"
           disabled={!isActive}
@@ -133,7 +131,7 @@ export default function UserRow({
           <EyeIcon className="w-5 h-5 text-cyan-700" />
         </button>
         <button
-          className="hover:bg-cyan-100 px-2 py-1 rounded-full"
+          className="hover:bg-cyan-100 px-2 py-1 rounded-full transition"
           onClick={() => onFichaTecnica(user)}
           aria-label="Abrir ficha técnica"
           disabled={!isActive}
@@ -141,31 +139,34 @@ export default function UserRow({
           <ClipboardDocumentListIcon className="w-5 h-5 text-fuchsia-700" />
         </button>
       </td>
-      <td className="px-2 py-2 text-center flex flex-row gap-2 items-center">
-        {canBeApproved ? (
-          <button
-            className="bg-emerald-700 hover:bg-emerald-900 text-white px-4 py-1 rounded-full text-xs font-bold shadow"
-            onClick={() => onApproveCandidate(user.id)}
-            aria-label="Aprobar candidato"
-          >Aprobar</button>
-        ) : (
-          <span className="inline-block text-xs text-slate-400">—</span>
-        )}
+      <td className="px-2 py-2 flex flex-row flex-wrap gap-2 items-center justify-center min-w-[148px]">
         {canToggleActive && (
-          <button
-            title={isActive ? "Dar de baja" : "Activar"}
-            className={`ml-1 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow ${isActive ? "text-gray-800" : "text-emerald-700"}`}
-            onClick={() => setConfirmAction({ type: "toggle", user })}
-            aria-label={isActive ? "Dar de baja" : "Activar"}
-          >
-            <PowerIcon className="w-4 h-4" />
-            {isActive ? "Dar de baja" : "Activar"}
-          </button>
+          isActive ? (
+            <button
+              title="Dar de baja"
+              className="inline-flex min-w-[104px] justify-center items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-200 hover:bg-yellow-300 border border-gray-300 text-gray-800 text-xs font-semibold shadow-xs transition-shadow focus:outline-none"
+              onClick={() => setConfirmAction({ type: "toggle", user })}
+              aria-label="Dar de baja"
+            >
+              <PowerIcon className="w-4 h-4 mb-0.5" />
+              Dar de baja
+            </button>
+          ) : (
+            <button
+              title="Activar"
+              className="inline-flex min-w-[104px] justify-center items-center gap-1 px-2.5 py-1.5 rounded-full bg-emerald-100 hover:bg-emerald-200 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs transition-shadow focus:outline-none"
+              onClick={() => setConfirmAction({ type: "toggle", user })}
+              aria-label="Activar"
+            >
+              <PowerIcon className="w-4 h-4 mb-0.5" />
+              Activar
+            </button>
+          )
         )}
         {canDelete && (
           <button
             title="Eliminar usuario"
-            className="ml-1 bg-red-200 hover:bg-red-400 transition px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 text-red-700 shadow"
+            className="inline-flex min-w-[104px] justify-center items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 hover:bg-red-200 border border-red-200 text-red-700 text-xs font-semibold shadow-xs transition-shadow focus:outline-none"
             onClick={() => setConfirmAction({ type: "delete", user })}
             aria-label="Eliminar usuario"
           >
@@ -186,7 +187,7 @@ export default function UserRow({
                   onClick={() => setConfirmAction(null)}
                 >Cancelar</button>
                 <button
-                  className={`px-4 py-2 rounded ${isActive ? "bg-yellow-600 text-white" : "bg-emerald-700 text-white"} font-bold`}
+                  className={`px-4 py-2 rounded ${isActive ? "bg-yellow-400 text-slate-900" : "bg-emerald-700 text-white"} font-bold`}
                   onClick={() => { setConfirmAction(null); onSetActive(user.id, !isActive); }}
                   disabled={false}
                 >
