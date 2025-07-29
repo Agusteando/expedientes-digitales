@@ -7,19 +7,8 @@ set MAINT_TEMPLATE=%APP_DIR%\maintenance-template.html
 set MAINT_FILE=%APP_DIR%\maintenance.html
 set PM2_APP=expedientes-digitales
 
-:: === 1. ASK FOR DURATION ===
-:ASK_DURATION
-set /p DURATION="Enter expected downtime (minutes, e.g. 15): "
-
-:: Validate: must be a positive integer
-for /f "delims=0123456789" %%A in ("%DURATION%") do (
-    echo [ERROR] Invalid input. Enter numbers only.
-    goto ASK_DURATION
-)
-if "%DURATION%"=="" (
-    echo [ERROR] Duration cannot be empty.
-    goto ASK_DURATION
-)
+:: === 1. DURATION (Always 5 Minutes, No Prompt) ===
+set DURATION=5
 
 :: === 2. CALCULATE ETA ===
 for /f "tokens=1-4 delims=:. " %%a in ("%time%") do (
@@ -40,7 +29,6 @@ echo [INFO] Maintenance ETA: %ETA_STR%
 :: === 3. GENERATE MAINTENANCE PAGE WITH ETA ===
 if not exist "%MAINT_TEMPLATE%" (
     echo [ERROR] Template file %MAINT_TEMPLATE% not found!
-    pause
     exit /b 1
 )
 copy "%MAINT_TEMPLATE%" "%MAINT_FILE%" >nul
@@ -63,7 +51,6 @@ call npm ci
 call npm run build
 if errorlevel 1 (
     echo !!! Build failed. Keeping site in maintenance mode !!!
-    pause
     exit /b 1
 )
 
@@ -81,5 +68,4 @@ del "%APP_DIR%\maintenance.flag"
 iisreset
 
 echo === ✅ Deployment Completed Successfully ===
-pause
 ENDLOCAL
