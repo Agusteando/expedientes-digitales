@@ -2,12 +2,152 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Actualizando...</title>
+  <title>Signia se está actualizando...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; text-align: center; margin-top: 20%; font-size: 2em; }
+    :root {
+      --bg: #f7f8fa;
+      --card-bg: #fff;
+      --text: #222;
+      --accent: #0045b5;
+      --timer: #e63946;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1b1e22;
+        --card-bg: #23262b;
+        --text: #f4f4f4;
+        --accent: #4ea8ff;
+        --timer: #ff758f;
+      }
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .centered {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      box-shadow: 0 8px 32px 0 rgba(60,72,88,0.12), 0 1.5px 4px 0 rgba(60,72,88,0.06);
+      padding: 2.5em 2em 2em 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 420px;
+      width: 95%;
+      margin: auto;
+    }
+    .logo {
+      margin-bottom: 1.3em;
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 1px 8px 0 rgba(60,72,88,0.08);
+      padding: 1em;
+    }
+    h1 {
+      margin: 0 0 0.5em 0;
+      font-weight: 700;
+      font-size: 1.6em;
+      color: var(--accent);
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+    .msg {
+      font-size: 1.14em;
+      margin-bottom: 1.6em;
+      text-align: center;
+      color: var(--text);
+    }
+    .info {
+      margin-top: 0.3em;
+      text-align: center;
+      font-size: 1em;
+      color: #7a7a7a;
+    }
+    .eta {
+      font-size: 1.06em;
+      color: var(--accent);
+      margin-bottom: 0.4em;
+      font-weight: 500;
+    }
+    #timer {
+      font-size: 2.1em;
+      font-weight: 600;
+      color: var(--timer);
+      letter-spacing: 0.01em;
+      margin-bottom: 0.6em;
+    }
+    .footer {
+      margin-top: 2.2em;
+      font-size: 0.98em;
+      color: #999;
+      text-align: center;
+      opacity: 0.85;
+    }
+    @media (max-width: 600px) {
+      .card { padding: 1.5em 0.6em 1.4em 0.6em; }
+      .logo { width: 84px; height: 84px; }
+      #timer { font-size: 1.3em; }
+    }
   </style>
 </head>
 <body>
-  🔄 Signia se esta actualizando... Vuelve en unos minutos.
+  <div class="centered">
+    <div class="card">
+      <img src="/signia.png" alt="Signia Logo" class="logo" loading="lazy">
+      <h1>Signia se está actualizando…</h1>
+      <div class="msg">
+        Estamos realizando mejoras.<br>
+        <span class="eta">
+          Finalización estimada:&nbsp;<span id="eta"></span>
+        </span>
+        <div id="timer"></div>
+        <div class="info">
+          La página se actualizará automáticamente cuando la actualización termine.
+        </div>
+      </div>
+      <div class="footer">
+        &copy; <span id="year"></span> Signia
+      </div>
+    </div>
+  </div>
+  <script>
+    // Parse ETA from injected variable
+    const eta = new Date("{{ETA}}");
+    // Show ETA
+    function pad(n) { return n < 10 ? "0" + n : n; }
+    const etaStr = pad(eta.getHours()) + ":" + pad(eta.getMinutes()) + (eta.getSeconds() ? (":" + pad(eta.getSeconds())) : "");
+    document.getElementById("eta").textContent = etaStr;
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    function updateTimer() {
+      const now = new Date();
+      let diff = eta - now;
+      if (diff <= 0) {
+        document.getElementById("timer").textContent = "Actualizando…";
+        setTimeout(() => location.reload(), 3000); // refresh after 3 seconds
+        return;
+      }
+      let m = Math.floor(diff / 60000);
+      let s = Math.floor((diff % 60000) / 1000);
+      document.getElementById("timer").textContent = `${pad(m)}:${pad(s)} restantes`;
+      setTimeout(updateTimer, 1000);
+    }
+    updateTimer();
+  </script>
 </body>
 </html>
