@@ -5,7 +5,7 @@ import UserManagementTable from "./UserManagementTable";
 import BulkActionBar from "./BulkActionBar";
 import UserDocsDrawer from "./UserDocsDrawer";
 import UserFichaTecnicaDrawer from "./UserFichaTecnicaDrawer";
-import { CheckCircleIcon, XCircleIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, XCircleIcon, ChevronLeftIcon, ChevronRightIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -25,6 +25,9 @@ export default function UserManagementPanel({
   const [docsDrawer, setDocsDrawer] = useState({ open: false, user: null });
   const [fichaDrawer, setFichaDrawer] = useState({ open: false, user: null });
   const [feedback, setFeedback] = useState({ type: null, message: "" });
+
+  // Export loading state
+  const [exporting, setExporting] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -169,6 +172,40 @@ export default function UserManagementPanel({
   function handleOpenFichaTecnica(user) { setFichaDrawer({ open: true, user }); }
   function closeFichaDrawer() { setFichaDrawer({ open: false, user: null }); }
 
+  async function handleExcelExport() {
+    setExporting(true);
+    setFeedback({ type: "info", message: "Generando reporte..." });
+    try {
+      const res = await fetch(`/api/admin/users/export-excel`, {
+        method: "GET",
+        headers: { "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error("No se pudo generar el Excel: " + txt.slice(0, 200));
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      const today = new Date();
+      el.download = `ExpedientePorPlantel_${today.toISOString().slice(0,10)}.xlsx`;
+      el.style.display = "none";
+      document.body.appendChild(el);
+      el.click();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        el.remove();
+      }, 750);
+      setFeedback({ type: "success", message: "Descarga iniciada" });
+      setExporting(false);
+      setTimeout(() => setFeedback({ type: null, message: "" }), 1300);
+    } catch (e) {
+      setFeedback({ type: "error", message: `${e.message || e}` });
+      setExporting(false);
+    }
+  }
+
   // Pagination controls (mobile-first, sticky)
   function PaginationBar() {
     return (
@@ -208,6 +245,24 @@ export default function UserManagementPanel({
             <ChevronRightIcon className="w-5 h-5 inline mb-0.5" />
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // -- Export Button: shown to admin/superadmin only, sticky right above the table
+  function ExportBar() {
+    if (!["superadmin", "admin"].includes(adminRole)) return null;
+    return (
+      <div className="flex w-full items-center justify-end mb-2">
+        <button
+          type="button"
+          onClick={handleExcelExport}
+          disabled={exporting}
+          className="flex items-center gap-2 bg-gradient-to-r from-emerald-700 to-cyan-700 hover:from-cyan-700 hover:to-fuchsia-700 text-white font-bold px-4 py-2 rounded-full shadow transition text-xs sm:text-base disabled:opacity-70"
+        >
+          <ArrowDownTrayIcon className="w-5 h-5" />
+          {exporting ? "Generando Excel…" : "Exportar Excel por plantel"}
+        </button>
       </div>
     );
   }
@@ -269,6 +324,7 @@ export default function UserManagementPanel({
           </div>
         )}
       </header>
+      <ExportBar />
       <PaginationBar />
       <UserManagementTable
         users={paginatedUsers}
