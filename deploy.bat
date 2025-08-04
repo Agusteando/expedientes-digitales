@@ -42,8 +42,7 @@ iisreset
 :: === 5. UPDATE CODE FROM GIT ===
 echo === Pulling latest code from origin/main ===
 cd /d "%APP_DIR%"
-git fetch origin main
-git reset --hard origin/main
+git pull origin main --force
 
 :: === 6. INSTALL & BUILD ===
 echo === Installing dependencies & building ===
