@@ -27,6 +27,13 @@ const iconMap = {
   CheckCircleIcon:        require("@heroicons/react/24/solid").CheckCircleIcon,
 };
 
+// Helper: is expediente (user part) complete? — all user upload steps fulfilled
+function isUserExpedienteDigitalComplete(stepStatus) {
+  return stepsExpediente
+    .filter(s => !s.adminUploadOnly && !s.isPlantelSelection)
+    .every(step => stepStatus?.[step.key]?.checklist?.fulfilled);
+}
+
 export default function EmployeeOnboardingWizard({ user: userProp, mode = "expediente" }) {
   const [user, setUser] = useState(userProp);
   const [currentStep, setCurrentStep] = useState(0);
@@ -35,6 +42,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const [stepStatus, setStepStatus] = useState({});
   const [stepHistory, setStepHistory] = useState({});
   const [planteles, setPlanteles] = useState([]);
+
   // Show only non-admin-upload steps for user; add summary step
   const userSteps = useMemo(
     () =>
@@ -44,8 +52,7 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   );
   const totalSteps = userSteps.length;
 
-  // Rest of document upload/upload state logic unchanged
-
+  // Logic for file/document upload and state
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
@@ -222,15 +229,19 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
     xhr.send(formData);
   }
 
+  // Main check for welcome/expediente-completo
+  const expedienteCompleto =
+    user &&
+    user.role === "employee" &&
+    isUserExpedienteDigitalComplete(stepStatus);
+
   // Calculate completed steps, fulfillment, etc.
   const steps = userSteps;
   const step = steps[currentStep];
   const status = (step.key && stepStatus?.[step.key]) ? stepStatus[step.key] : {};
   const historyDocs = (step.key && stepHistory?.[step.key]) ? stepHistory[step.key] : [];
   const latestDoc = historyDocs.length ? historyDocs[0] : null;
-  const { checklist } = status;
 
-  // No more signable/admin steps, only regular user files + summary
   function isCurrentStepFulfilled(curStep) {
     if (!curStep || !curStep.key) return false;
     if (curStep.key === "plantel") {
@@ -249,18 +260,13 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
 
   const canGoNext =
     currentStep < totalSteps - 1 && isCurrentStepFulfilled(step) && !uploading && !savingPlantel;
-
   const canGoPrev = currentStep > 0 && !uploading && !savingPlantel;
-
   const nextButtonBase = mainButton + " min-w-[128px] flex items-center gap-2 justify-center transition relative overflow-visible";
   const nextButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const stickyTop = "top-16";
 
-  if (user && user.role === "employee") {
-    return <WelcomeApproved user={user} />;
-  }
-
+  // === MAIN CONDITIONALS ===
   if (loadingData)
     return (
       <div className="w-full flex flex-col items-center justify-center py-12">
@@ -275,6 +281,15 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
       </div>
     );
 
+  // ==== ONLY show Welcome screen if role=employee AND user uploadable docs complete ====
+  if (expedienteCompleto) {
+    return <WelcomeApproved user={user} />;
+  }
+
+  // (optional) UX: If user is employee but expediente not yet complete, show info message at top
+  const showEmpNotCompleteBanner =
+    user && user.role === "employee" && !expedienteCompleto;
+
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[620px] relative">
       <div className={`w-full z-30 sticky ${stickyTop} px-0 xs:px-1 sm:px-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100/70 dark:border-slate-900/70`}>
@@ -288,6 +303,12 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
         />
       </div>
       <section className={wizardCard + " relative mt-0"}>
+        {showEmpNotCompleteBanner && (
+          <div className="w-full mb-4 text-center px-2 py-2 rounded-lg bg-yellow-50 border-l-4 border-yellow-400 text-yellow-900 font-bold text-sm">
+            Eres empleado(a), pero tu expediente digital está incompleto.
+            Por favor, termina de subir todos los documentos requeridos para concluir tu expediente.
+          </div>
+        )}
         <div className="flex flex-col items-center justify-center mb-3 pt-0">
           {step.iconKey && iconMap[step.iconKey] && (
             <div className="w-14 h-14 relative mb-2">
