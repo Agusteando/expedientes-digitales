@@ -14,10 +14,8 @@ import {
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "../stepMetaExpediente";
 
-// 11 user-upload keys:
 const DOC_KEYS = stepsExpediente.filter(s => !s.isPlantelSelection && !s.adminUploadOnly).map(s => s.key);
 
-// Static meta for admin-doc and system fields
 const CHECKLIST_META = {
   proyectivos: {
     label: "Proyectivos entregados (admin)",
@@ -27,20 +25,27 @@ const CHECKLIST_META = {
     chip: "bg-white border-purple-400 text-purple-900",
     admin: true,
   },
-  evaId: {
-    label: "Evaluatest",
+  evaDictamen: {
+    label: "Dictamen EVA (Evaluatest)",
     icon: DocumentTextIcon,
     color: "bg-blue-50 border-blue-200 text-blue-900",
     chip: "bg-blue-100 border-blue-200 text-blue-900",
-    field: true,
+    dictamen: true,
   },
-  pathId: {
-    label: "PATH",
+  ecoDictamen: {
+    label: "ECO Dictamen",
     icon: DocumentTextIcon,
     color: "bg-fuchsia-50 border-fuchsia-200 text-fuchsia-900",
     chip: "bg-fuchsia-100 border-fuchsia-200 text-fuchsia-900",
-    field: true,
-  }
+    dictamen: true,
+  },
+  mmpiDictamen: {
+    label: "MMPI-2 RF Dictamen",
+    icon: DocumentTextIcon,
+    color: "bg-violet-50 border-violet-200 text-violet-900",
+    chip: "bg-violet-100 border-violet-200 text-violet-900",
+    dictamen: true,
+  },
 };
 
 function formatDateDisplay(date) {
@@ -79,14 +84,16 @@ function checklistIcon(type, status) {
   if (type === "proyectivos") {
     return <ShieldExclamationIcon className="w-5 h-5 text-purple-600" />;
   }
-  if (CHECKLIST_META[type]?.field) {
-    return status ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <ClockIcon className="w-5 h-5 text-yellow-500" />;
+  if (CHECKLIST_META[type]?.dictamen) {
+    return status
+      ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
+      : <ClockIcon className="w-5 h-5 text-yellow-500" />;
   }
-  // default docs
-  return status ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <ClockIcon className="w-5 h-5 text-yellow-500" />;
+  return status
+    ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
+    : <ClockIcon className="w-5 h-5 text-yellow-500" />;
 }
 
-// Dropzone
 function UploadDropzone({ onFile, accept = "application/pdf,image/*", disabled = false }) {
   const [drag, setDrag] = useState(false);
   return (
@@ -120,16 +127,34 @@ function UploadDropzone({ onFile, accept = "application/pdf,image/*", disabled =
   );
 }
 
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "archivo.pdf";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  }, 900);
+}
+
 export default function UserDocsDrawer({ open, user, onClose }) {
   const [docs, setDocs] = useState(null);
   const [loading, setLoading] = useState(false);
-
   const [pending, setPending] = useState({});
   const [uploading, setUploading] = useState({});
   const [uploadSuccess, setUploadSuccess] = useState({});
   const [uploadError, setUploadError] = useState({});
-  // UI state for proyectivos upload block
   const [showProyDropzone, setShowProyDropzone] = useState(false);
+
+  // Dictamens (eco/mmpi) URLs
+  const [dictamens, setDictamens] = useState({ ecoUrl: null, mmpiUrl: null });
+
+  // EVA download
+  const [evaDownloading, setEvaDownloading] = useState(false);
+  const [evaDownloadError, setEvaDownloadError] = useState("");
 
   useEffect(() => {
     async function loadDocs() {
@@ -138,9 +163,27 @@ export default function UserDocsDrawer({ open, user, onClose }) {
       const r = await fetch(`/api/admin/user/${user.id}/docs`);
       const d = await r.json();
       setDocs(d); setLoading(false); setPending({});
-      setShowProyDropzone(false); // Always reset on open/reload
+      setShowProyDropzone(false);
     }
     loadDocs();
+  }, [open, user]);
+
+  useEffect(() => {
+    async function fetchDictamens() {
+      if (!open || !user?.id || !user.pathId) {
+        setDictamens({ ecoUrl: null, mmpiUrl: null });
+        return;
+      }
+      try {
+        const res = await fetch(`/api/users/${user.id}/dictamens`, { cache: "no-store" });
+        if (!res.ok) return setDictamens({ ecoUrl: null, mmpiUrl: null });
+        const data = await res.json();
+        setDictamens({ ecoUrl: data.ecoUrl, mmpiUrl: data.mmpiUrl });
+      } catch {
+        setDictamens({ ecoUrl: null, mmpiUrl: null });
+      }
+    }
+    fetchDictamens();
   }, [open, user]);
 
   async function handleUpload(type) {
@@ -160,7 +203,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
         setUploadSuccess(s => ({ ...s, [type]: "¡Subido correctamente!" }));
         setTimeout(() => setUploadSuccess(s => ({ ...s, [type]: "" })), 1200);
         setPending(f => ({ ...f, [type]: undefined }));
-        setShowProyDropzone(false); // Hide dropzone on success
+        setShowProyDropzone(false);
         setLoading(true);
         const fresh = await fetch(`/api/admin/user/${user.id}/docs`).then(r => r.json());
         setDocs(fresh); setLoading(false);
@@ -169,6 +212,24 @@ export default function UserDocsDrawer({ open, user, onClose }) {
       setUploadError(e => ({ ...e, [type]: String(err.message || err) }));
     }
     setUploading(u => ({ ...u, [type]: false }));
+  }
+
+  // EVA Dictamen download button handler
+  async function handleEvaDictamenDownload() {
+    setEvaDownloading(true); setEvaDownloadError("");
+    try {
+      const res = await fetch(`/api/users/${user.id}/eva-dictamen`);
+      if (!res.ok) {
+        setEvaDownloadError("No se encontró el dictamen EVA.");
+        setEvaDownloading(false);
+        return;
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, `eva_dictamen_${user.evaId || user.name || user.id}.pdf`);
+    } catch(e) {
+      setEvaDownloadError("Hubo un error al descargar el dictamen EVA.");
+    }
+    setEvaDownloading(false);
   }
 
   if (!open || !user) return null;
@@ -182,7 +243,11 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const userChecklistArr = docs?.checklist || [];
   const checklistByType = Object.fromEntries(userChecklistArr.map((c) => [c.type, c]));
 
-  // Always 14: 11 user+ proy + evaId + pathId
+  // Prepare dictamen download fields
+  const ecoDictamenUrl = dictamens.ecoUrl || null;
+  const mmpiDictamenUrl = dictamens.mmpiUrl || null;
+
+  // Compose checklist rows, now with dictamens (remove PATH ID!)
   const checklistData = [
     ...DOC_KEYS.map(key => ({
       key,
@@ -197,16 +262,21 @@ export default function UserDocsDrawer({ open, user, onClose }) {
       doc: docsByType.proyectivos,
     },
     {
-      key: "evaId",
-      type: "field",
+      key: "evaDictamen",
+      type: "dictamen",
       fulfilled: !!user.evaId,
-      value: user.evaId,
     },
     {
-      key: "pathId",
-      type: "field",
-      fulfilled: !!user.pathId,
-      value: user.pathId,
+      key: "ecoDictamen",
+      type: "dictamen",
+      fulfilled: !!ecoDictamenUrl,
+      dictamenUrl: ecoDictamenUrl,
+    },
+    {
+      key: "mmpiDictamen",
+      type: "dictamen",
+      fulfilled: !!mmpiDictamenUrl,
+      dictamenUrl: mmpiDictamenUrl,
     },
   ];
 
@@ -272,7 +342,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                 Volver a subir proyectivos
               </button>
             )}
-            {/* Dropzone only shown if not uploaded or is in showProyDropzone mode */}
             {(!docsByType.proyectivos || showProyDropzone) && (
               <>
                 <UploadDropzone
@@ -348,6 +417,108 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   ? "bg-emerald-100 text-emerald-700 border-emerald-200"
                   : "bg-yellow-100 text-yellow-700 border-yellow-200";
               }
+              // Download logic for dictamens
+              if (item.key === "evaDictamen" && user.evaId) {
+                return (
+                  <div
+                    key={item.key}
+                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color}`}
+                  >
+                    <div className="flex flex-row gap-2 items-center mb-1">
+                      <span className="flex-shrink-0 flex items-center justify-center">
+                        {checklistIcon(item.key, !!user.evaId)}
+                      </span>
+                      <span className="font-bold">{checklistLabel(item.key)}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <button
+                        type="button"
+                        className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border border-blue-300 bg-blue-100 text-blue-900 hover:bg-blue-200 transition disabled:opacity-70 select-none`}
+                        disabled={evaDownloading}
+                        onClick={handleEvaDictamenDownload}
+                      >
+                        {evaDownloading ? (
+                          <svg className="animate-spin w-4 h-4 text-blue-700" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        ) : (
+                          <ArrowDownTrayIcon className="w-4 h-4" />
+                        )}
+                        Descargar dictamen EVA
+                      </button>
+                      {evaDownloadError && (
+                        <span className="text-xs font-bold text-red-600">
+                          {evaDownloadError}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
+                      {item.fulfilled
+                        ? <CheckCircleIcon className="w-4 h-4" />
+                        : <ClockIcon className="w-4 h-4" />}
+                      {item.fulfilled ? "¡Dictamen disponible!" : "Falta"}
+                    </span>
+                  </div>
+                );
+              }
+              if (meta?.dictamen && item.dictamenUrl) {
+                return (
+                  <div
+                    key={item.key}
+                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color ? color : ""}`}
+                  >
+                    <div className="flex flex-row gap-2 items-center mb-1">
+                      <span className="flex-shrink-0 flex items-center justify-center">
+                        {checklistIcon(item.key, item.fulfilled)}
+                      </span>
+                      <span className="font-bold">{checklistLabel(item.key)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      <a
+                        href={item.dictamenUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className="flex items-center px-3 py-1 border border-cyan-200 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs"
+                      >
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+                        Descargar dictamen
+                      </a>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
+                      {item.fulfilled
+                        ? <CheckCircleIcon className="w-4 h-4" />
+                        : <ClockIcon className="w-4 h-4" />}
+                      {item.fulfilled ? "¡Dictamen disponible!" : "Falta"}
+                    </span>
+                  </div>
+                );
+              }
+              if (meta?.admin && !item.doc) {
+                return (
+                  <div
+                    key={item.key}
+                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color ? color : ""}`}
+                  >
+                    <div className="flex flex-row gap-2 items-center mb-1">
+                      <span className="flex-shrink-0 flex items-center justify-center">
+                        {checklistIcon(item.key, item.fulfilled)}
+                      </span>
+                      <span className="font-bold">{checklistLabel(item.key)}</span>
+                    </div>
+                    <span className="text-xs font-medium bg-purple-200 text-purple-900 py-1 rounded-full px-3 inline-block mt-1 border border-purple-400 shadow">
+                      <ShieldExclamationIcon className="w-4 h-4 inline -mt-1 mr-1 text-purple-600" />
+                      Sólo administrador puede subir
+                    </span>
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
+                      {item.fulfilled
+                        ? <CheckCircleIcon className="w-4 h-4" />
+                        : <ClockIcon className="w-4 h-4" />}
+                      {item.fulfilled
+                        ? (item.key === "proyectivos" ? "¡Completado!" : "Entregado/completo")
+                        : "Falta"}
+                    </span>
+                  </div>
+                );
+              }
+              // Regular doc upload entries
               return (
                 <div
                   key={item.key}
@@ -359,7 +530,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                     </span>
                     <span className="font-bold">{checklistLabel(item.key)}</span>
                   </div>
-                  {/* Download block for any checklist item with a document */}
                   {item.doc && (
                     <div className="flex items-center gap-2 flex-wrap mt-2">
                       <a
@@ -376,21 +546,6 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                       </span>
                     </div>
                   )}
-                  {meta?.admin && !item.doc && (
-                    <span className="text-xs font-medium bg-purple-200 text-purple-900 py-1 rounded-full px-3 inline-block mt-1 border border-purple-400 shadow">
-                      <ShieldExclamationIcon className="w-4 h-4 inline -mt-1 mr-1 text-purple-600" />
-                      Sólo administrador puede subir
-                    </span>
-                  )}
-                  {meta?.field && (
-                    <div className="text-xs text-blue-800 flex items-center gap-2 mb-1">
-                      {item.fulfilled
-                        ? <span>Registrado:&nbsp;<b>{item.value}</b></span>
-                        : <span className="text-yellow-700 italic">No registrado</span>
-                      }
-                    </div>
-                  )}
-                  {/* Single completion chip, visually after other information */}
                   <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
                     {item.fulfilled
                       ? <CheckCircleIcon className="w-4 h-4" />
