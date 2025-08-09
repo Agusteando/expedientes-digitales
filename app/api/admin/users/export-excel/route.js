@@ -45,20 +45,34 @@ export async function GET(req) {
     permittedPlantelIds = session.plantelesAdminIds;
   }
 
-  // fetch users (employee & candidate) per plantel
+  // fetch users (employee & candidate) per plantel, now with new ordering and extra fields
   const users = await prisma.user.findMany({
     where: {
       role: { in: ["candidate", "employee"] },
       plantelId: { in: permittedPlantelIds }
     },
     select: {
-      id: true, name: true, email: true, picture: true, role: true, plantelId: true, isActive: true,
-      evaId: true, pathId: true,
+      id: true,
+      apellidoPaterno: true,
+      apellidoMaterno: true,
+      nombres: true,
+      name: true, // fallback for legacy, do not use in Excel
+      email: true,
+      picture: true,
+      role: true,
+      plantelId: true,
+      isActive: true,
+      evaId: true,
+      pathId: true,
       checklistItems: { select: { type: true, fulfilled: true } },
       documents: { select: { type: true, status: true, version: true, uploadedAt: true } },
       createdAt: true, updatedAt: true
     },
-    orderBy: [{ name: "asc" }]
+    orderBy: [
+      { apellidoPaterno: "asc" },
+      { apellidoMaterno: "asc" },
+      { nombres: "asc" }
+    ]
   });
 
   // group by plantelId
@@ -73,12 +87,22 @@ export async function GET(req) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "IECS-IEDIS";
   wb.created = new Date();
-  // Build master header row: static fields, then all checklist/fields, then missing, progress, status
+  // Build master header row: apellidoPaterno, apellidoMaterno, nombres, then static fields, then all checklist/fields, then missing, progress, status
   const header = [
-    "plantel", "usuario", "correo", "rol", "estatus", "completados", "total", "progreso (%)",
+    "Apellido paterno",
+    "Apellido materno",
+    "Nombres",
+    "plantel",
+    "correo",
+    "rol",
+    "estatus",
+    "completados",
+    "total",
+    "progreso (%)",
     ...checklistMeta.map(s => s.label),
     ...extraFields.map(f => f.label),
-    "Faltantes (CSV)", "Última actualización"
+    "Faltantes (CSV)",
+    "Última actualización"
   ];
 
   for (const plantel of planteles) {
@@ -127,9 +151,16 @@ export async function GET(req) {
       const status = u.isActive ? "Activo" : "Baja";
       const percent = Math.round((done * 100) / total);
 
+      // Resolve fields safely
+      const apellidoPaterno = u.apellidoPaterno || "";
+      const apellidoMaterno = u.apellidoMaterno || "";
+      const nombres = u.nombres || "";
+
       ws.addRow([
+        apellidoPaterno,
+        apellidoMaterno,
+        nombres,
         plantel.name,
-        u.name,
         u.email,
         u.role === "employee" ? "Empleado" : "Candidato",
         status,
@@ -193,9 +224,15 @@ export async function GET(req) {
       const status = u.isActive ? "Activo" : "Baja";
       const percent = Math.round((done * 100) / total);
 
+      const apellidoPaterno = u.apellidoPaterno || "";
+      const apellidoMaterno = u.apellidoMaterno || "";
+      const nombres = u.nombres || "";
+
       ws.addRow([
+        apellidoPaterno,
+        apellidoMaterno,
+        nombres,
         "Sin Plantel",
-        u.name,
         u.email,
         u.role === "employee" ? "Empleado" : "Candidato",
         status,
