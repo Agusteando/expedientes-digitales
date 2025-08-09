@@ -63,14 +63,23 @@ if errorlevel 1 (
 echo [STEP] Clearing locked Prisma engine (if any)...
 rmdir /S /Q "%APP_DIR%\node_modules\.prisma" 2>nul
 
-echo [STEP] Installing dependencies ^& building...
-call npm ci
+echo [STEP] Installing dependencies (legacy peer deps)...
+call npm ci --legacy-peer-deps
 if errorlevel 1 (
     echo [ERROR] npm ci failed.
     set EXITCODE=1
     goto :end
 )
 
+echo [STEP] Generating Prisma client...
+call npx prisma generate
+if errorlevel 1 (
+    echo [ERROR] Prisma generate failed.
+    set EXITCODE=1
+    goto :end
+)
+
+echo [STEP] Building project...
 call npm run build
 if errorlevel 1 (
     echo [ERROR] npm run build failed.
