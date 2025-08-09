@@ -29,7 +29,6 @@
     "next-auth": "^4.24.11",
     "next-transpile-modules": "^10.0.1",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.3.31",
     "pdfkit": "^0.17.1",
     "puppeteer": "^18.2.1",
     "react": "^19.0.0",
