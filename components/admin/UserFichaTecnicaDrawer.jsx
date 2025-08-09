@@ -4,7 +4,114 @@ import { useState, useEffect } from "react";
 import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
-// NSS field added to FIELDS
+// PUESTO OPTIONS
+const PUESTO_OPTIONS = [
+  "MUSICA",
+  "COORD GRAL",
+  "INGLES KII",
+  "TIT BI",
+  "COORD PED ",
+  "COMPRAS",
+  "ESPAÑOL KI",
+  "JEFA COCINA",
+  "TIT MBI",
+  "INNOVACION ",
+  "APOYO ADMON",
+  " EXP CORPORAL",
+  "COORD GRAL INGLES",
+  "COORD DEPORTES",
+  "INGLES KIII",
+  "DESARROLLO HUMANO",
+  "COORD GUARDE ME",
+  "COORD PSICOL PA",
+  "AUX DISEÑO",
+  "INGLES 4",
+  "COMANDANTE",
+  "TIT LB ",
+  "TIT LB",
+  "INVENTARIOS",
+  "COORD INGLES PB",
+  "COORD GUARDE TOL",
+  "COORD INGLES PA",
+  "COORD DISEÑO",
+  "AUX DRA",
+  "BIOLOGIA Y QUIMICA",
+  "COORD. INGLES",
+  "COORD MKT TOL",
+  "INGLES 1",
+  "ORIENTADOR",
+  "ESPAÑOL 5 ",
+  "INGLES KI-KII-KIII",
+  "COORD ESPAÑOL PB ",
+  "DIRECTOR ESCOLAR",
+  "INGLÉS 1",
+  "CONTADOR GENERAL",
+  "TIT MB",
+  "COORD MKT ME",
+  "INGLES 3",
+  "ESPAÑOL 4",
+  "ESPAÑOL 2",
+  "COORD PEDAGOCICA",
+  "AUX LCMA",
+  "INGLÉS 2",
+  "RH",
+  "ADMON PB",
+  "INTENDENCIA ",
+  "TIT LA",
+  "NUTRIOLOGA",
+  "ESPAÑOL 6",
+  "INTEDENCIA",
+  "ESPAÑOL KIII",
+  "TRABAJADORA SOCIAL",
+  "JEFE DE MTTO",
+  "BANCOS",
+  "QUIMICA",
+  "ADMON PA",
+  "SUB COORD ARTES",
+  "COORD PEDAGOGICO",
+  "COMPUTACION ",
+  "TI ",
+  "AUX L",
+  "MAESTRO DE BASQUETBOL",
+  "AUX MBIIA",
+  "VIGILANTE COMODIN",
+  "AUX INGLÉS",
+  "FCYE & HISTORIA",
+  "BIOLOGIA",
+  "EDUCACION FISICA",
+  "APRECIACIÓN ARTISTICA",
+  "AUX LBI",
+  "COMPUTACIÓN",
+  "ENEFERMERA",
+  "TIT KIII",
+  "TIT KII",
+  "ARTES",
+  "AUX ",
+  "DOCENTE",
+  "TI",
+  "TENIS",
+  "AJEDREZ",
+  "BASQUETBOL",
+  "CHOFER",
+  "AUX BII",
+  "COOR PEDAGOGICO",
+  "SUB COORD DESARROLLO HUMANO",
+  "TOCHO",
+  "AUX RECLUTAMIENTO",
+  "INTENDECIA",
+  "COMPUTACIÓN & TI",
+  "SUB DIRECTOR SEC",
+  "COMODIN",
+  "AUX COMPRAS",
+  "FISICA",
+  "MEDICO ESCOLAR",
+  "COMMUNITY MANAGER",
+  "AUX CAFETERIAS ",
+  "AUX DOCENTE INGLÉS",
+  "GEOGRAFIA"
+];
+
+// Updated FIELDS: puesto now handled as a select (see render below)
 const FIELDS = [
   { key: "rfc", label: "RFC", icon: IdentificationIcon },
   { key: "curp", label: "CURP", icon: KeyIcon },
@@ -234,6 +341,19 @@ export default function UserFichaTecnicaDrawer({
                         <option value="">Seleccionar plantel...</option>
                         {(canEdit ? editablePlanteles : planteles).map(p =>
                           <option key={p.id} value={p.id}>{p.name}</option>
+                        )}
+                      </select>
+                    ) : f.key === "puesto" ? (
+                      <select
+                        name="puesto"
+                        value={ficha.puesto}
+                        onChange={handleChange}
+                        disabled={!canEdit || isSaving}
+                        className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
+                      >
+                        <option value="">Seleccionar puesto...</option>
+                        {PUESTO_OPTIONS.map(opt =>
+                          <option key={opt.trim()} value={opt.trim()}>{opt.trim()}</option>
                         )}
                       </select>
                     ) : (
