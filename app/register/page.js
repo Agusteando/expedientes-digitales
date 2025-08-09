@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { UserPlusIcon, CheckCircleIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
@@ -22,7 +22,9 @@ function validCurp(curp) {
 // Registration Form Step
 function RegisterFormStep({ disabled }) {
   const [form, setForm] = useState({
-    name: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    nombres: "",
     email: "",
     password: "",
     password2: "",
@@ -45,9 +47,17 @@ function RegisterFormStep({ disabled }) {
   function fieldError(field, value = undefined) {
     const val = value !== undefined ? value : form[field];
     switch (field) {
-      case "name":
-        if (!val) return "El nombre es obligatorio.";
-        if (val.trim().length < 2) return "Tu nombre debe contener al menos 2 caracteres.";
+      case "apellidoPaterno":
+        if (!val) return "El apellido paterno es obligatorio.";
+        if (val.trim().length < 2) return "Debe contener al menos 2 caracteres.";
+        return "";
+      case "nombres":
+        if (!val) return "El(los) nombre(s) es obligatorio.";
+        if (val.trim().length < 2) return "Debe contener al menos 2 caracteres.";
+        return "";
+      case "apellidoMaterno":
+        if (!val) return "El apellido materno es obligatorio.";
+        if (val.trim().length < 2) return "Debe contener al menos 2 caracteres.";
         return "";
       case "email":
         if (!val) return "El correo electrónico es obligatorio.";
@@ -80,7 +90,9 @@ function RegisterFormStep({ disabled }) {
   }
 
   const localFieldErrors = {
-    name: fieldError("name"),
+    apellidoPaterno: fieldError("apellidoPaterno"),
+    apellidoMaterno: fieldError("apellidoMaterno"),
+    nombres: fieldError("nombres"),
     email: fieldError("email"),
     curp: fieldError("curp"),
     rfc: fieldError("rfc"),
@@ -105,7 +117,9 @@ function RegisterFormStep({ disabled }) {
     setServerTopError("");
     setSuccess("");
     setTouched({
-      name: true,
+      apellidoPaterno: true,
+      apellidoMaterno: true,
+      nombres: true,
       email: true,
       password: true,
       password2: true,
@@ -129,7 +143,9 @@ function RegisterFormStep({ disabled }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name,
+          apellidoPaterno: form.apellidoPaterno,
+          apellidoMaterno: form.apellidoMaterno,
+          nombres: form.nombres,
           email: form.email,
           password: form.password,
           curp: form.curp,
@@ -166,10 +182,6 @@ function RegisterFormStep({ disabled }) {
   const passwordReq =
     "La contraseña debe tener al menos 7 caracteres. Puede contener letras, números, signos o símbolos.";
 
-  const passwordValid = validatePassword(form.password);
-  const passwordsMatch =
-    !!form.password && !!form.password2 && form.password === form.password2;
-
   return (
     <div
       className={`w-full max-w-md mx-auto bg-white/90 dark:bg-gray-900 shadow-xl rounded-xl md:rounded-2xl px-5 py-8 md:px-10 md:py-12 border border-gray-100 dark:border-gray-800 transition ${
@@ -202,30 +214,84 @@ function RegisterFormStep({ disabled }) {
           {serverTopError}
         </div>
       )}
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} autoComplete="off" noValidate>
+      <form className="flex flex-col gap-3" onSubmit={handleSubmit} autoComplete="off" noValidate>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="apellidoPaterno">
+              Apellido paterno
+            </label>
+            <input
+              className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+                displayFieldError("apellidoPaterno")
+                  ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                  : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+              } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
+              id="apellidoPaterno"
+              name="apellidoPaterno"
+              autoComplete="family-name"
+              required
+              value={form.apellidoPaterno}
+              onChange={formChange}
+              onBlur={() => markTouched("apellidoPaterno")}
+              placeholder="Ej. Ramírez"
+              aria-invalid={!!displayFieldError("apellidoPaterno")}
+            />
+            {displayFieldError("apellidoPaterno") && (
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("apellidoPaterno")}
+              </div>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="apellidoMaterno">
+              Apellido materno
+            </label>
+            <input
+              className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+                displayFieldError("apellidoMaterno")
+                  ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                  : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+              } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
+              id="apellidoMaterno"
+              name="apellidoMaterno"
+              autoComplete="additional-name"
+              required
+              value={form.apellidoMaterno}
+              onChange={formChange}
+              onBlur={() => markTouched("apellidoMaterno")}
+              placeholder="Ej. Cortés"
+              aria-invalid={!!displayFieldError("apellidoMaterno")}
+            />
+            {displayFieldError("apellidoMaterno") && (
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("apellidoMaterno")}
+              </div>
+            )}
+          </div>
+        </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="name">
-            Nombre completo
+          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="nombres">
+            Nombre(s)
           </label>
           <input
             className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
-              displayFieldError("name")
+              displayFieldError("nombres")
                 ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
                 : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
             } bg-white dark:bg-gray-800 placeholder-gray-400 dark:text-white`}
-            id="name"
-            name="name"
-            autoComplete="name"
+            id="nombres"
+            name="nombres"
+            autoComplete="given-name"
             required
-            value={form.name}
+            value={form.nombres}
             onChange={formChange}
-            onBlur={() => markTouched("name")}
-            placeholder="Ingresa tu nombre"
-            aria-invalid={!!displayFieldError("name")}
+            onBlur={() => markTouched("nombres")}
+            placeholder="Ej. Ana Paula"
+            aria-invalid={!!displayFieldError("nombres")}
           />
-          {displayFieldError("name") && (
+          {displayFieldError("nombres") && (
             <div className="text-xs text-red-600 mt-1">
-              {displayFieldError("name")}
+              {displayFieldError("nombres")}
             </div>
           )}
         </div>
