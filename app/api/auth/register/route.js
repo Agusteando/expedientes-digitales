@@ -18,11 +18,18 @@ function validRfc(rfc) {
 
 export async function POST(req) {
   try {
-    const { name, email, password, curp, rfc } = await req.json();
+    const { apellidoPaterno, apellidoMaterno, nombres, email, password, curp, rfc } = await req.json();
     const errors = {};
 
-    if (!name || typeof name !== "string" || name.trim().length < 2) {
-      errors.name = "El nombre es obligatorio y debe contener al menos 2 caracteres.";
+    // Validate required split-name fields
+    if (!apellidoPaterno || typeof apellidoPaterno !== "string" || apellidoPaterno.trim().length < 2) {
+      errors.apellidoPaterno = "El apellido paterno es obligatorio y debe contener al menos 2 caracteres.";
+    }
+    if (!apellidoMaterno || typeof apellidoMaterno !== "string" || apellidoMaterno.trim().length < 2) {
+      errors.apellidoMaterno = "El apellido materno es obligatorio y debe contener al menos 2 caracteres.";
+    }
+    if (!nombres || typeof nombres !== "string" || nombres.trim().length < 2) {
+      errors.nombres = "El(los) nombre(s) es obligatorio y debe contener al menos 2 caracteres.";
     }
     if (!email || typeof email !== "string" || !validEmail(email)) {
       errors.email = "El correo electrónico no es válido.";
@@ -66,6 +73,8 @@ export async function POST(req) {
 
     const hash = await bcrypt.hash(password, 10);
 
+    const name = `${apellidoPaterno.trim()} ${apellidoMaterno.trim()} ${nombres.trim()}`;
+
     await prisma.user.create({
       data: {
         name,
@@ -75,6 +84,9 @@ export async function POST(req) {
         isActive: true,
         curp: curp.toUpperCase().trim(),
         rfc: rfc.toUpperCase().trim(),
+        apellidoPaterno: apellidoPaterno.trim(),
+        apellidoMaterno: apellidoMaterno.trim(),
+        nombres: nombres.trim(),
       },
     });
 
