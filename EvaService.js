@@ -31,6 +31,36 @@ class EvaService {
   }
   getLogTail() { return this.logs.slice(-80); }
 
+  // === SAFE evaluate helper ===
+  async _eval(fn, ...args) {
+    // Log a short, stable preview of the function source as it will be serialized
+    try {
+      const src = `(${fn.toString()})`;
+      const preview = src.length > 420 ? `${src.slice(0, 420)}…` : src;
+      this._log(`evaluate: ${preview}`);
+    } catch (_) {
+      this._log("evaluate: <unable to preview function source>");
+    }
+
+    // Log argument shapes with token masking
+    const maskedArgs = args.map((a) => {
+      if (typeof a === "string") {
+        // Mask secrets/tokens
+        if (a.length > 20) return `${a.slice(0, 6)}…${a.slice(-4)}`;
+        return a;
+      }
+      if (a && typeof a === "object") {
+        // Don’t dump large objects; show top-level keys
+        try { return { _keys: Object.keys(a).slice(0, 12) }; } catch { return { _type: "object" }; }
+      }
+      return a;
+    });
+    this._log(`evaluate args: ${JSON.stringify(maskedArgs)}`);
+
+    // Execute in the page context
+    return this.page.evaluate(fn, ...args);
+  }
+
   getUsers() {
     if (!this.ready) {
       this._log("getUsers called before ready (status=" + this.status + ")");
@@ -128,11 +158,19 @@ class EvaService {
     } catch (e) {
       this._log("Network login failed, trying localStorage...");
       try {
-        const dataObj = await this.page.evaluate(() => {
-          try { return JSON.parse(localStorage.getItem("authorization") || "{}"); }
-          catch (_) { return {}; }
-        });
-        if (!dataObj.access_token) throw new Error("No access token in localStorage");
+        // Standalone, closure-free function for evaluate
+        const readAuthFromLocalStorage = function () {
+          try {
+            var raw = (window && window.localStorage ? window.localStorage.getItem("authorization") : null) || "{}";
+            // Return only the parsed object to keep the external API identical
+            return JSON.parse(raw);
+          } catch (err) {
+            return {};
+          }
+        };
+
+        const dataObj = await this._eval(readAuthFromLocalStorage);
+        if (!dataObj || !dataObj.access_token) throw new Error("No access token in localStorage");
         this.accessToken  = dataObj.access_token;
         this.refreshToken = dataObj.refresh_token;
         this._log("Got accessToken from localStorage");
@@ -147,21 +185,50 @@ class EvaService {
   async get(apiPath, useApi = false, headers = {}) {
     const url = `${useApi ? this.apiEmpresasBaseUrl : this.empresasBaseUrl}${apiPath}`;
     this._log("GET " + url);
-    return this.page.evaluate(
-      async (token, url, extraHeaders) => {
-        const headers = {
+
+    // Fully self-contained function for page context
+    const evalGetJson = async function (token, targetUrl, extraHeaders) {
+      try {
+        // Build headers entirely inside the page context
+        var base = {
           accept: "application/json,text/plain,*/*",
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-          ...extraHeaders
+          authorization: "Bearer " + String(token || ""),
+          "content-type": "application/json"
         };
-        const res = await fetch(url, { method: "GET", headers });
-        return res.json();
-      },
+        var merged = {};
+        // Manual merge to avoid spread operators being altered by transformers
+        var k;
+        for (k in base) { if (Object.prototype.hasOwnProperty.call(base, k)) { merged[k] = base[k]; } }
+        if (extraHeaders && typeof extraHeaders === "object") {
+          for (k in extraHeaders) { if (Object.prototype.hasOwnProperty.call(extraHeaders, k)) { merged[k] = extraHeaders[k]; } }
+        }
+
+        // Always use window.fetch explicitly
+        var res = await window.fetch(String(targetUrl), { method: "GET", headers: merged });
+
+        // Prefer JSON, fall back to text (some endpoints may respond differently on errors)
+        var ct = (res && res.headers && res.headers.get) ? res.headers.get("content-type") : null;
+        if (ct && ct.indexOf("application/json") !== -1) {
+          return res.json();
+        }
+        return res.text();
+      } catch (err) {
+        // Surface a structured error back to Node
+        return { __eva_error: true, message: String(err && err.message ? err.message : err) };
+      }
+    };
+
+    const out = await this._eval(
+      evalGetJson,
       this.accessToken,
       url,
       headers
     );
+
+    if (out && out.__eva_error) {
+      throw new Error("Page evaluate GET failed: " + out.message);
+    }
+    return out;
   }
 
   async precargar() {
