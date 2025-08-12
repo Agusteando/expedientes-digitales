@@ -1,7 +1,18 @@
 
 "use client";
 import { useState, useEffect } from "react";
-import { BuildingLibraryIcon, IdentificationIcon, KeyIcon, HomeIcon, CalendarDaysIcon, Bars3BottomLeftIcon, ClockIcon, ArrowDownOnSquareStackIcon, ArrowDownTrayIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import {
+  BuildingLibraryIcon,
+  IdentificationIcon,
+  KeyIcon,
+  HomeIcon,
+  CalendarDaysIcon,
+  Bars3BottomLeftIcon,
+  ClockIcon,
+  ArrowDownOnSquareStackIcon,
+  ArrowDownTrayIcon,
+  ShieldCheckIcon
+} from "@heroicons/react/24/outline";
 import Image from "next/image";
 
 // PUESTO OPTIONS
@@ -53,6 +64,8 @@ const PUESTO_OPTIONS = [
   "ESPAÑOL 2",
   "COORD PEDAGOCICA",
   "AUX LCMA",
+  "AUX LC",
+  "AUX MA",
   "INGLÉS 2",
   "RH",
   "ADMON PB",
@@ -352,7 +365,10 @@ export default function UserFichaTecnicaDrawer({
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
                       >
                         <option value="">Seleccionar puesto...</option>
-                        {PUESTO_OPTIONS.map(opt =>
+                        {/* PUESTO_OPTIONS alphabetically, unique */}
+                        {[...new Set(PUESTO_OPTIONS)].sort((a, b) =>
+                          a.trim().localeCompare(b.trim(), "es", {sensitivity: "base"})
+                        ).map(opt =>
                           <option key={opt.trim()} value={opt.trim()}>{opt.trim()}</option>
                         )}
                       </select>
