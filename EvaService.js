@@ -214,91 +214,119 @@ class EvaService {
   }
 
   async login() {
-    await this.ensurePage();
+    // NEW: Implement up to 2 retry attempts for access token acquisition failures
+    let attempts = 0;
+    const maxAttempts = 2;
+    let lastError = null;
+    while (attempts < maxAttempts) {
+      try {
+        await this.ensurePage();
 
-    // Always try to clear cookies/storage best effort
-    try {
-      // clear cookies
-      const client = await this.page.target().createCDPSession();
-      await client.send("Network.clearBrowserCookies");
-      // localStorage/sessionStorage
-      await this.page.evaluate(() => {
+        // Always try to clear cookies/storage best effort
         try {
-          if (window.localStorage) window.localStorage.clear();
-        } catch {}
-        try {
-          if (window.sessionStorage) window.sessionStorage.clear();
-        } catch {}
-        try {
-          if (window.document && window.document.cookie) {
-            const cookies = document.cookie.split(";") || [];
-            for (const c of cookies) {
-              const eq = c.indexOf("=");
-              const name = eq > -1 ? c.substr(0, eq) : c;
-              document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;";
-            }
-          }
-        } catch {}
-      });
-      this._log("Cleared cookies/storage");
-    } catch (e) {
-      this._log("Failed to clear storage: " + (e && e.message ? e.message : e));
-    }
-
-    this._log("Navigating to Evaluatest login page...");
-    await this.page.goto(this.empresasBaseUrl, {
-      waitUntil: ["domcontentloaded", "load"],
-      timeout: 0,
-    });
-    await this.page.type('input[name="Email"]', this.email);
-    await this.page.type('input[name="Password"]', this.password);
-
-    await this.page.waitForSelector('button[type="submit"]');
-    await this.page.keyboard.press("Enter");
-
-    let dataObj = undefined;
-
-    // wait for /api/authorization as XHR with fallback to polling localStorage
-    try {
-      this._log("Waiting for /api/authorization response...");
-      const response = await this.page.waitForResponse(
-        (resp) => resp.url().includes("/api/authorization"),
-        { timeout: 5000 }
-      );
-      dataObj = await response.json();
-      if (!dataObj.access_token) throw new Error("No access token in response");
-      this.accessToken  = dataObj.access_token;
-      this.refreshToken = dataObj.refresh_token;
-      this._log("Got accessToken (network)");
-      return this.accessToken;
-    } catch (e) {
-      this._log("Network login failed, trying localStorage polling...");
-      // Poll localStorage.authorization up to ~30s with 300ms intervals
-      let tries = 0, maxTries = 100;
-      while (tries++ < maxTries) {
-        try {
-          // Standalone, closure-free for evaluate
-          const pollLocalStorage = function () {
+          // clear cookies
+          const client = await this.page.target().createCDPSession();
+          await client.send("Network.clearBrowserCookies");
+          // localStorage/sessionStorage
+          await this.page.evaluate(() => {
             try {
-              var raw = (window && window.localStorage ? window.localStorage.getItem("authorization") : null) || "{}";
-              return JSON.parse(raw);
-            } catch (err) {
-              return {};
-            }
-          };
-          dataObj = await this._eval(pollLocalStorage);
-          if (dataObj && dataObj.access_token) {
-            this.accessToken  = dataObj.access_token;
-            this.refreshToken = dataObj.refresh_token;
-            this._log("Got accessToken from localStorage after submit/poll");
-            return this.accessToken;
+              if (window.localStorage) window.localStorage.clear();
+            } catch {}
+            try {
+              if (window.sessionStorage) window.sessionStorage.clear();
+            } catch {}
+            try {
+              if (window.document && window.document.cookie) {
+                const cookies = document.cookie.split(";") || [];
+                for (const c of cookies) {
+                  const eq = c.indexOf("=");
+                  const name = eq > -1 ? c.substr(0, eq) : c;
+                  document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;";
+                }
+              }
+            } catch {}
+          });
+          this._log("Cleared cookies/storage");
+        } catch (e) {
+          this._log("Failed to clear storage: " + (e && e.message ? e.message : e));
+        }
+
+        this._log("Navigating to Evaluatest login page...");
+        await this.page.goto(this.empresasBaseUrl, {
+          waitUntil: ["domcontentloaded", "load"],
+          timeout: 0,
+        });
+        await this.page.type('input[name="Email"]', this.email);
+        await this.page.type('input[name="Password"]', this.password);
+
+        await this.page.waitForSelector('button[type="submit"]');
+        await this.page.keyboard.press("Enter");
+
+        let dataObj = undefined;
+
+        // wait for /api/authorization as XHR with fallback to polling localStorage
+        try {
+          this._log("Waiting for /api/authorization response...");
+          const response = await this.page.waitForResponse(
+            (resp) => resp.url().includes("/api/authorization"),
+            { timeout: 5000 }
+          );
+          dataObj = await response.json();
+          if (!dataObj.access_token) throw new Error("No access token in response");
+          this.accessToken  = dataObj.access_token;
+          this.refreshToken = dataObj.refresh_token;
+          this._log("Got accessToken (network)");
+          return this.accessToken;
+        } catch (e) {
+          this._log("Network login failed, trying localStorage polling...");
+          // Poll localStorage.authorization up to ~30s with 300ms intervals
+          let tries = 0, maxTries = 100;
+          while (tries++ < maxTries) {
+            try {
+              // Standalone, closure-free for evaluate
+              const pollLocalStorage = function () {
+                try {
+                  var raw = (window && window.localStorage ? window.localStorage.getItem("authorization") : null) || "{}";
+                  return JSON.parse(raw);
+                } catch (err) {
+                  return {};
+                }
+              };
+              dataObj = await this._eval(pollLocalStorage);
+              if (dataObj && dataObj.access_token) {
+                this.accessToken  = dataObj.access_token;
+                this.refreshToken = dataObj.refresh_token;
+                this._log("Got accessToken from localStorage after submit/poll");
+                return this.accessToken;
+              }
+            } catch {}
+            await new Promise((resolve) => setTimeout(resolve, 300 + Math.floor(Math.random()*60)));
           }
-        } catch {}
-        await new Promise((resolve) => setTimeout(resolve, 300 + Math.floor(Math.random()*60)));
+          this._log("Failed to get access token after login attempt (network and localStorage polling failed)");
+          // EDIT: On this failure, retry if attempts < maxAttempts
+          throw new Error("Failed to get access token after login");
+        }
+      } catch (err) {
+        lastError = err;
+        const msg = (err && err.message) || String(err || "");
+        if (
+          msg === "Failed to get access token after login" &&
+          attempts + 1 < maxAttempts
+        ) {
+          this._log(`login: access token acquisition failed (attempt ${attempts + 1} of ${maxAttempts}), retrying after short backoff...`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1200 + Math.floor(Math.random() * 400))
+          );
+          attempts++;
+          continue;
+        } else {
+          // Immediately throw all other errors, or if retries are exhausted.
+          throw err;
+        }
       }
-      this._log("Failed to get access token after login attempt (network and localStorage polling failed)");
-      throw new Error("Failed to get access token after login");
     }
+    // If we reach here, all allowed attempts have failed.
+    throw lastError || new Error("Failed to get access token after login (all attempts)");
   }
 
   async get(apiPath, useApi = false, headers = {}) {
