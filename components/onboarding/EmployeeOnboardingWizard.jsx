@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
-import { ArrowLeftCircleIcon, ArrowRightCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowLeftCircleIcon, ArrowRightCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "../stepMetaExpediente";
 import { wizardCard, secondaryButton, mainButton } from "../../lib/ui-classes";
 import OnboardingStepper from "./OnboardingStepper";
@@ -59,6 +59,27 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const [uploadProgress, setUploadProgress] = useState(null);
   const [savingPlantel, setSavingPlantel] = useState(false);
   const successTimeout = useRef();
+
+  // Bypass logic: session-based, for "Necesito actualizar mis documentos"
+  const [bypassWelcome, setBypassWelcome] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBypassWelcome(window.sessionStorage.getItem("expedienteWizardBypass") === "true");
+    }
+  }, [userProp.id]);
+  function handleBypassClick() {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("expedienteWizardBypass", "true");
+      setBypassWelcome(true);
+    }
+  }
+  function handleBypassExit() {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("expedienteWizardBypass");
+      setBypassWelcome(false);
+    }
+    setCurrentStep(0);
+  }
 
   useEffect(() => {
     async function fetchPlanteles() {
@@ -266,7 +287,6 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
   const prevButtonDisabled = "opacity-40 grayscale pointer-events-none";
   const stickyTop = "top-16";
 
-  // === MAIN CONDITIONALS ===
   if (loadingData)
     return (
       <div className="w-full flex flex-col items-center justify-center py-12">
@@ -281,12 +301,11 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
       </div>
     );
 
-  // ==== ONLY show Welcome screen if role=employee AND user uploadable docs complete ====
-  if (expedienteCompleto) {
-    return <WelcomeApproved user={user} />;
+  // Only show Welcome screen if role=employee AND expediente complete AND bypass not active
+  if (expedienteCompleto && !bypassWelcome) {
+    return <WelcomeApproved user={user} onRequestBypass={handleBypassClick} />;
   }
 
-  // (optional) UX: If user is employee but expediente not yet complete, show info message at top
   const showEmpNotCompleteBanner =
     user && user.role === "employee" && !expedienteCompleto;
 
@@ -301,6 +320,20 @@ export default function EmployeeOnboardingWizard({ user: userProp, mode = "exped
           allowFreeJump={true}
           className="py-1"
         />
+        {/* Render Cancelar/Salir button only during bypass mode */}
+        {bypassWelcome && (
+          <div className="flex justify-end pt-1 pr-2">
+            <button
+              type="button"
+              className="flex items-center gap-1 font-bold text-fuchsia-600 hover:text-cyan-700 text-sm bg-slate-50 dark:bg-slate-900 px-3 py-1 rounded-full border border-fuchsia-200 dark:border-fuchsia-700 transition shadow"
+              onClick={handleBypassExit}
+              tabIndex={0}
+            >
+              <XCircleIcon className="w-5 h-5" />
+              Cancelar actualización
+            </button>
+          </div>
+        )}
       </div>
       <section className={wizardCard + " relative mt-0"}>
         {showEmpNotCompleteBanner && (

@@ -1,14 +1,13 @@
 
 import Image from "next/image";
 
-export default function WelcomeApproved({ user }) {
+export default function WelcomeApproved({ user, onRequestBypass }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[430px] w-full animate-fade-in px-2 pb-6">
       <div
         className="max-w-lg w-full bg-gradient-to-br from-white via-cyan-50 to-fuchsia-50 dark:from-slate-950 dark:via-cyan-900 dark:to-fuchsia-900 rounded-3xl shadow-2xl border border-cyan-100 dark:border-cyan-800 px-5 xs:px-9 md:px-16 pt-8 pb-10 flex flex-col items-center relative"
         style={{marginTop: "clamp(2.5rem, 7vw, 4.5rem)"}}
       >
-        {/* Give more top margin (below topbar) for mascot overlap */}
         <div className="w-full h-0" style={{marginTop: "min(2.6rem,6vw)"}} />
         <Image
           src="/Husky.png"
@@ -18,7 +17,6 @@ export default function WelcomeApproved({ user }) {
           priority
           className="rounded-full w-28 h-28 xs:w-36 xs:h-36 object-contain shadow-lg border-4 border-fuchsia-200 absolute -top-16 left-1/2 -translate-x-1/2 bg-white"
           style={{
-            // On larger screens (sm/md+), raise the Husky less so it's not hidden behind nav
             top: "calc(-2.5rem - min(8vw, 2.25rem))"
           }}
         />
@@ -50,6 +48,17 @@ export default function WelcomeApproved({ user }) {
           Si tienes dudas o necesitas ayuda, no dudes en acercarte...<br />
           ¡Estamos aquí para acompañarte en este camino!
         </div>
+        {typeof onRequestBypass === "function" && (
+          <div className="w-full flex flex-col items-center justify-center mt-4">
+            <button
+              className="px-6 py-2 rounded-full bg-cyan-700 hover:bg-fuchsia-700 text-white font-bold shadow-lg transition text-base mt-2"
+              onClick={onRequestBypass}
+              type="button"
+            >
+              📝 Necesito actualizar mis documentos
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
