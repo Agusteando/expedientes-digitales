@@ -11,6 +11,10 @@ import {
   ArrowDownTrayIcon,
   XMarkIcon,
   DocumentTextIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  DocumentDuplicateIcon
 } from "@heroicons/react/24/solid";
 import { stepsExpediente } from "../stepMetaExpediente";
 
@@ -19,7 +23,6 @@ const DOC_KEYS = stepsExpediente.filter(s => !s.isPlantelSelection && !s.adminUp
 const CHECKLIST_META = {
   proyectivos: {
     label: "Proyectivos entregados (admin)",
-    hint: "SÓLO admin puede subir",
     icon: ShieldExclamationIcon,
     color: "bg-purple-100 border-purple-300 text-purple-900",
     chip: "bg-white border-purple-400 text-purple-900",
@@ -55,6 +58,8 @@ function formatDateDisplay(date) {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     });
   } catch {
     return String(date);
@@ -92,6 +97,12 @@ function checklistIcon(type, status) {
   return status
     ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
     : <ClockIcon className="w-5 h-5 text-yellow-500" />;
+}
+
+// File preview: only for .jpg, .jpeg, .png, .gif, .svg
+function canPreviewFile(filePath) {
+  if (!filePath) return false;
+  return /\.(jpe?g|png|gif|svg)$/i.test(filePath);
 }
 
 function UploadDropzone({ onFile, accept = "application/pdf,image/*", disabled = false }) {
@@ -148,6 +159,8 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const [uploadSuccess, setUploadSuccess] = useState({});
   const [uploadError, setUploadError] = useState({});
   const [showProyDropzone, setShowProyDropzone] = useState(false);
+  const [activeSection, setActiveSection] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
 
   // Dictamens (eco/mmpi) URLs
   const [dictamens, setDictamens] = useState({ ecoUrl: null, mmpiUrl: null });
@@ -234,12 +247,28 @@ export default function UserDocsDrawer({ open, user, onClose }) {
 
   if (!open || !user) return null;
 
-  // Docs normalized for this user (get last version for each)
-  const userDocsArr = docs?.documents || [];
-  const docsByType = {};
-  for (const doc of userDocsArr.sort((a, b) => (b.version || 1) - (a.version || 1))) {
-    if (!docsByType[doc.type]) docsByType[doc.type] = doc;
+  // --- Normalize documents by version for each type ---
+  // We'll use all versions for every document type.
+  const userDocsArr = Array.isArray(docs?.documents) ? docs.documents.slice() : [];
+  const versionsByType = {};
+  for (const doc of userDocsArr) {
+    if (!versionsByType[doc.type]) versionsByType[doc.type] = [];
+    versionsByType[doc.type].push(doc);
   }
+  // Sort versions per type (descending: latest first)
+  for (const k in versionsByType) {
+    versionsByType[k] = versionsByType[k].slice().sort((a, b) => {
+      // Descending by version, tiebreaker uploadedAt
+      if ((b.version || 1) !== (a.version || 1))
+        return (b.version || 1) - (a.version || 1);
+      if (b.uploadedAt && a.uploadedAt) {
+        return new Date(b.uploadedAt) - new Date(a.uploadedAt);
+      }
+      return 0;
+    });
+  }
+
+  // Checklist/fields logic
   const userChecklistArr = docs?.checklist || [];
   const checklistByType = Object.fromEntries(userChecklistArr.map((c) => [c.type, c]));
 
@@ -247,19 +276,21 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const ecoDictamenUrl = dictamens.ecoUrl || null;
   const mmpiDictamenUrl = dictamens.mmpiUrl || null;
 
-  // Compose checklist rows, now with dictamens (remove PATH ID!)
+  // Compose checklist for completion/progress
   const checklistData = [
     ...DOC_KEYS.map(key => ({
       key,
       type: "doc",
       fulfilled: checklistByType[key]?.fulfilled || false,
-      doc: docsByType[key],
+      doc: (versionsByType[key] && versionsByType[key][0]) || null,
+      docVersions: versionsByType[key] || [],
     })),
     {
       key: "proyectivos",
       type: "admin-doc",
-      fulfilled: !!docsByType.proyectivos,
-      doc: docsByType.proyectivos,
+      fulfilled: !!(versionsByType.proyectivos && versionsByType.proyectivos[0]),
+      doc: (versionsByType.proyectivos && versionsByType.proyectivos[0]) || null,
+      docVersions: versionsByType.proyectivos || [],
     },
     {
       key: "evaDictamen",
@@ -283,6 +314,26 @@ export default function UserDocsDrawer({ open, user, onClose }) {
   const done = checklistData.filter(i => i.fulfilled).length;
   const total = checklistData.length;
   const pct = total ? Math.round((done/total)*100) : 0;
+
+  // Accordions
+  function toggleSection(type) {
+    setActiveSection(s => s === type ? null : type);
+  }
+
+  // UX for image preview modal
+  function PreviewModal({ url, onClose }) {
+    return (
+      <div className="fixed inset-0 z-[99] bg-black/70 flex items-center justify-center">
+        <div className="relative bg-white max-w-xs xs:max-w-sm sm:max-w-md rounded-lg p-2 shadow-2xl">
+          <button className="absolute right-2 top-2 bg-white rounded-full text-cyan-900 shadow px-2 py-1 z-10" onClick={onClose}>
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+          {/* Force image to fit */}
+          <img src={url} alt="Previsualización" className="max-w-xs max-h-[70vh] rounded-xl shadow border border-cyan-200 bg-white" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex justify-end">
@@ -315,10 +366,10 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             <div className="flex items-center gap-2 font-bold text-base mb-1 text-purple-900">
               <ShieldExclamationIcon className="w-7 h-7 text-purple-500" /> Proyectivos (admin)
             </div>
-            {docsByType.proyectivos && !showProyDropzone && (
+            {versionsByType.proyectivos && versionsByType.proyectivos.length > 0 && !showProyDropzone && (
               <div className="flex flex-col gap-0.5 mb-1">
                 <div className="flex items-center gap-3">
-                  <a href={docsByType.proyectivos.filePath} target="_blank" rel="noopener"
+                  <a href={versionsByType.proyectivos[0].filePath} target="_blank" rel="noopener"
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-cyan-100 text-cyan-700 border border-cyan-200"
                   >
                     <ArrowDownTrayIcon className="w-4 h-4" /> Descargar
@@ -328,11 +379,11 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                   </span>
                 </div>
                 <div className="text-xs text-slate-500">
-                  Subido el {formatDateDisplay(docsByType.proyectivos.uploadedAt)}
+                  Subido el {formatDateDisplay(versionsByType.proyectivos[0].uploadedAt)}
                 </div>
               </div>
             )}
-            {docsByType.proyectivos && !showProyDropzone && (
+            {versionsByType.proyectivos && versionsByType.proyectivos.length > 0 && !showProyDropzone && (
               <button
                 className="mt-2 inline-flex items-center gap-2 px-4 py-1.5 bg-purple-700 hover:bg-purple-900 text-white rounded-full font-bold text-xs"
                 onClick={() => setShowProyDropzone(true)}
@@ -342,14 +393,14 @@ export default function UserDocsDrawer({ open, user, onClose }) {
                 Volver a subir proyectivos
               </button>
             )}
-            {(!docsByType.proyectivos || showProyDropzone) && (
+            {(!versionsByType.proyectivos || versionsByType.proyectivos.length === 0 || showProyDropzone) && (
               <>
                 <UploadDropzone
                   onFile={file => { setPending(f=>({...f, ["proyectivos"]:file})); setUploadError(e=>({...e,["proyectivos"]:""})); setUploadSuccess(s=>({...s,["proyectivos"]:""})); }}
                   accept="application/pdf,image/*"
                   disabled={uploading["proyectivos"]}
                 />
-                {(docsByType.proyectivos && showProyDropzone) && (
+                {(versionsByType.proyectivos && versionsByType.proyectivos.length > 0 && showProyDropzone) && (
                   <button
                     type="button"
                     onClick={() => { setShowProyDropzone(false); setPending(f=>({...f,["proyectivos"]:undefined})); }}
@@ -384,9 +435,7 @@ export default function UserDocsDrawer({ open, user, onClose }) {
         <div className="px-5 pt-5 pb-5">
           <div className="mb-2 font-bold text-black mt-1 text-base">Resumen del expediente</div>
           <div className="flex items-center gap-3 mb-5">
-            <span className="text-xs font-bold text-cyan-800">
-              Progreso: {done} / {total}
-            </span>
+            <span className="text-xs font-bold text-cyan-800">Progreso: {done} / {total}</span>
             <div className="flex-1">
               <div className="w-full h-2 rounded-full bg-cyan-100">
                 <div
@@ -403,162 +452,165 @@ export default function UserDocsDrawer({ open, user, onClose }) {
             </div>
             <span className="text-xs font-mono font-bold text-slate-500">{pct}%</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            {checklistData.map(item => {
-              const meta = CHECKLIST_META[item.key];
-              let color = "";
-              let chip = "";
-              if (meta) {
-                color = meta.color;
-                chip = meta.chip;
-              } else {
-                color = item.fulfilled ? "border-emerald-100 bg-white" : "border-yellow-100 bg-yellow-50/30";
-                chip = item.fulfilled
-                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                  : "bg-yellow-100 text-yellow-700 border-yellow-200";
-              }
-              // Download logic for dictamens
-              if (item.key === "evaDictamen" && user.evaId) {
+          <div className="mb-6">
+            {/* Elegant accordion for each doc section */}
+            <div className="space-y-2">
+              {checklistData.map(item => {
+                // Only docs, skip dictamens (keep admin-docs)
+                if (item.type !== "doc" && item.type !== "admin-doc") return null;
+                const docVersions = item.docVersions || [];
+                const expanded = activeSection === item.key;
+                const isCompleted = !!(docVersions.length && item.fulfilled);
+                const latestDoc = docVersions.length > 0 ? docVersions[0] : null;
+                const label = checklistLabel(item.key);
+
                 return (
-                  <div
-                    key={item.key}
-                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center mb-1">
-                      <span className="flex-shrink-0 flex items-center justify-center">
-                        {checklistIcon(item.key, !!user.evaId)}
+                  <div key={item.key} className={`border rounded-2xl shadow-sm ${isCompleted ? "border-emerald-200 bg-emerald-50/40" : "border-cyan-100 bg-white"}`}>
+                    <button
+                      className="w-full flex flex-row items-center justify-between gap-2 px-3 py-3 sm:px-5 sm:py-4 rounded-2xl focus:outline-cyan-700"
+                      type="button"
+                      onClick={() => toggleSection(item.key)}
+                      aria-expanded={expanded}
+                      aria-controls={`doc-versions-${item.key}`}
+                      tabIndex={0}
+                    >
+                      <div className="flex flex-row items-center gap-3">
+                        {checklistIcon(item.key, isCompleted)}
+                        <span className={`font-bold text-base text-cyan-900`}>{label}</span>
+                        {isCompleted && <CheckCircleIcon className="w-4 h-4 text-emerald-600 ml-1" />}
+                      </div>
+                      <span>
+                        {expanded
+                          ? <ChevronDownIcon className="w-6 h-6 text-cyan-500" />
+                          : <ChevronRightIcon className="w-6 h-6 text-cyan-400" />
+                        }
                       </span>
-                      <span className="font-bold">{checklistLabel(item.key)}</span>
-                    </div>
-                    <div className="flex flex-col gap-1 mt-1">
-                      <button
-                        type="button"
-                        className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border border-blue-300 bg-blue-100 text-blue-900 hover:bg-blue-200 transition disabled:opacity-70 select-none`}
-                        disabled={evaDownloading}
-                        onClick={handleEvaDictamenDownload}
-                      >
-                        {evaDownloading ? (
-                          <svg className="animate-spin w-4 h-4 text-blue-700" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    </button>
+                    {expanded && (
+                      <div id={`doc-versions-${item.key}`} className="pb-0 px-3 sm:px-5 pt-0">
+                        {docVersions.length === 0 ? (
+                          <div className="text-xs text-slate-500 py-4 text-center">Sin archivos subidos.</div>
                         ) : (
-                          <ArrowDownTrayIcon className="w-4 h-4" />
+                          <ul className="divide-y">
+                            {docVersions.map((d, idx) => (
+                              <li key={d.id} className={`flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-3 ${idx === 0 ? "bg-cyan-50 rounded-lg" : ""}`}>
+                                <div className="flex flex-row items-center min-w-0 gap-2 flex-wrap">
+                                  {idx === 0 && <span className="inline-block px-2 py-0.5 text-xs font-bold bg-cyan-600 text-white rounded-full mr-2">Última versión</span>}
+                                  <span className="font-bold text-slate-700 mr-2">Versión {d.version} </span>
+                                  <span className="text-xs text-slate-500">{formatDateDisplay(d.uploadedAt)}</span>
+                                </div>
+                                <div className="flex flex-row gap-2 items-center flex-wrap">
+                                  <a
+                                    href={d.filePath}
+                                    target="_blank"
+                                    rel="noopener"
+                                    className="flex items-center px-3 py-1 rounded shadow-sm text-cyan-800 font-semibold border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 transition text-xs"
+                                    title="Descargar documento"
+                                  >
+                                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Descargar
+                                  </a>
+                                  {canPreviewFile(d.filePath) && (
+                                    <button
+                                      type="button"
+                                      className="flex items-center px-2.5 py-1 rounded border bg-white hover:bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm text-xs font-semibold"
+                                      onClick={() => setPreviewImage(d.filePath)}
+                                      title="Ver imagen"
+                                    >
+                                      <EyeIcon className="w-4 h-4 mr-0.5" /> Ver
+                                    </button>
+                                  )}
+                                  <a
+                                    href={d.filePath}
+                                    target="_blank"
+                                    rel="noopener"
+                                    className="flex items-center px-2.5 py-1 rounded border bg-white hover:bg-cyan-50 text-cyan-500 border-cyan-200 shadow-sm text-xs font-semibold"
+                                    title="Abrir en nueva pestaña"
+                                    style={{ minWidth: 34 }}
+                                  >
+                                    <DocumentDuplicateIcon className="w-4 h-4 mr-0.5" /> Abrir
+                                  </a>
+                                  {idx === 0 && (
+                                    <span className="inline-block rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-xs text-emerald-800 font-bold ml-2">
+                                      Activo
+                                    </span>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                        Descargar dictamen EVA
-                      </button>
-                      {evaDownloadError && (
-                        <span className="text-xs font-bold text-red-600">
-                          {evaDownloadError}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
-                      {item.fulfilled
-                        ? <CheckCircleIcon className="w-4 h-4" />
-                        : <ClockIcon className="w-4 h-4" />}
-                      {item.fulfilled ? "¡Dictamen disponible!" : "Falta"}
-                    </span>
+                      </div>
+                    )}
                   </div>
                 );
-              }
-              if (meta?.dictamen && item.dictamenUrl) {
-                return (
-                  <div
-                    key={item.key}
-                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color ? color : ""}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center mb-1">
-                      <span className="flex-shrink-0 flex items-center justify-center">
-                        {checklistIcon(item.key, item.fulfilled)}
-                      </span>
-                      <span className="font-bold">{checklistLabel(item.key)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap mt-1">
-                      <a
-                        href={item.dictamenUrl}
-                        target="_blank"
-                        rel="noopener"
-                        className="flex items-center px-3 py-1 border border-cyan-200 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs"
-                      >
-                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
-                        Descargar dictamen
-                      </a>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
-                      {item.fulfilled
-                        ? <CheckCircleIcon className="w-4 h-4" />
-                        : <ClockIcon className="w-4 h-4" />}
-                      {item.fulfilled ? "¡Dictamen disponible!" : "Falta"}
-                    </span>
-                  </div>
-                );
-              }
-              if (meta?.admin && !item.doc) {
-                return (
-                  <div
-                    key={item.key}
-                    className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color ? color : ""}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center mb-1">
-                      <span className="flex-shrink-0 flex items-center justify-center">
-                        {checklistIcon(item.key, item.fulfilled)}
-                      </span>
-                      <span className="font-bold">{checklistLabel(item.key)}</span>
-                    </div>
-                    <span className="text-xs font-medium bg-purple-200 text-purple-900 py-1 rounded-full px-3 inline-block mt-1 border border-purple-400 shadow">
-                      <ShieldExclamationIcon className="w-4 h-4 inline -mt-1 mr-1 text-purple-600" />
-                      Sólo administrador puede subir
-                    </span>
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
-                      {item.fulfilled
-                        ? <CheckCircleIcon className="w-4 h-4" />
-                        : <ClockIcon className="w-4 h-4" />}
-                      {item.fulfilled
-                        ? (item.key === "proyectivos" ? "¡Completado!" : "Entregado/completo")
-                        : "Falta"}
-                    </span>
-                  </div>
-                );
-              }
-              // Regular doc upload entries
-              return (
-                <div
-                  key={item.key}
-                  className={`flex flex-col p-4 rounded-2xl border shadow-sm gap-2 ${color ? color : ""}`}
-                >
-                  <div className="flex flex-row gap-2 items-center mb-1">
-                    <span className="flex-shrink-0 flex items-center justify-center">
-                      {checklistIcon(item.key, item.fulfilled)}
-                    </span>
-                    <span className="font-bold">{checklistLabel(item.key)}</span>
-                  </div>
-                  {item.doc && (
-                    <div className="flex items-center gap-2 flex-wrap mt-2">
-                      <a
-                        href={item.doc.filePath}
-                        target="_blank"
-                        rel="noopener"
-                        className="flex items-center px-3 py-1 border border-cyan-200 rounded-lg text-cyan-800 font-semibold bg-cyan-100 shadow-sm hover:bg-cyan-200 transition text-xs"
-                      >
-                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
-                        Descargar archivo
-                      </a>
-                      <span className="text-xs text-slate-500">
-                        Subido el {formatDateDisplay(item.doc.uploadedAt)}
-                      </span>
-                    </div>
-                  )}
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full border ${chip}`}>
-                    {item.fulfilled
-                      ? <CheckCircleIcon className="w-4 h-4" />
-                      : <ClockIcon className="w-4 h-4" />}
-                    {item.fulfilled
-                      ? (item.key === "proyectivos" ? "¡Completado!" : "Entregado/completo")
-                      : "Falta"}
-                  </span>
+              })}
+            </div>
+          </div>
+          {/* Dictamen accordion (minimal: always one "descargar" button) */}
+          <div className="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`border rounded-2xl shadow bg-blue-50/60 border-blue-100`}>
+              <div className="px-5 py-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2 font-bold">
+                  <DocumentTextIcon className="w-5 h-5 text-blue-600" /> Dictamen EVA (Evaluatest)
                 </div>
-              );
-            })}
+                {!user.evaId?
+                  <div className="text-xs text-slate-500 py-2">Sin dictamen disponible.</div>
+                :(
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-blue-700 hover:bg-blue-900 text-white rounded-full font-bold text-xs"
+                    disabled={evaDownloading}
+                    onClick={handleEvaDictamenDownload}
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    {evaDownloading ? "Descargando..." : "Descargar dictamen"}
+                  </button>
+                )}
+                {evaDownloadError && (
+                  <span className="text-xs text-red-700 font-semibold">{evaDownloadError}</span>
+                )}
+              </div>
+            </div>
+            <div className={`border rounded-2xl shadow bg-violet-50/60 border-violet-100`}>
+              <div className="px-5 py-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2 font-bold">
+                  <DocumentTextIcon className="w-5 h-5 text-violet-600" /> Dictamen MMPI/ECO
+                </div>
+                {!ecoDictamenUrl && !mmpiDictamenUrl ?
+                  <div className="text-xs text-slate-500 py-2">Sin dictámenes disponibles.</div>
+                :(
+                  <div className="flex flex-row flex-wrap gap-2">
+                    {!!ecoDictamenUrl && (
+                      <a
+                        href={ecoDictamenUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className="flex items-center px-3 py-1 border border-fuchsia-300 rounded-lg text-fuchsia-900 font-semibold bg-fuchsia-50 shadow-sm hover:bg-fuchsia-100 transition text-xs"
+                      >
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+                        Desc. ECO
+                      </a>
+                    )}
+                    {!!mmpiDictamenUrl && (
+                      <a
+                        href={mmpiDictamenUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className="flex items-center px-3 py-1 border border-violet-300 rounded-lg text-violet-900 font-semibold bg-violet-50 shadow-sm hover:bg-violet-100 transition text-xs"
+                      >
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+                        Desc. MMPI
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+        {previewImage && (
+          <PreviewModal url={previewImage} onClose={() => setPreviewImage(null)} />
+        )}
       </div>
     </div>
   );
