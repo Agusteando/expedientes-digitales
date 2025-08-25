@@ -121,7 +121,15 @@ const PUESTO_OPTIONS = [
   "COMMUNITY MANAGER",
   "AUX CAFETERIAS ",
   "AUX DOCENTE INGLÉS",
-  "GEOGRAFIA"
+  "GEOGRAFIA",
+  // --------- NUEVOS PUESTOS -----------
+  "MATENIMIENTO",
+  "ADMON ESCOLAR",
+  "AUX MERCADOTECNIA",
+  "MAKER",
+  "ESPAÑOL",
+  "INGLES",
+  "FC&E"
 ];
 
 // Updated FIELDS: puesto now handled as a select (see render below)
