@@ -6,6 +6,35 @@ import { getSessionFromCookies } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
+// Define all ficha fields (sync with FIELDS in UserFichaTecnicaDrawer)
+const FICHA_KEYS = [
+  { key: "rfc", label: "RFC" },
+  { key: "curp", label: "CURP" },
+  { key: "domicilioFiscal", label: "Domicilio fiscal" },
+  { key: "nss", label: "NSS" },
+  { key: "fechaIngreso", label: "Fecha de ingreso" },
+  { key: "puesto", label: "Puesto" },
+  { key: "horarioLaboral", label: "Horario laboral" },
+  { key: "plantel", label: "Plantel asignado" },
+];
+
+// User docs: only user-uploaded, mapped to meta docs
+const DOC_KEYS = [
+  { key: "identificacion_oficial", label: "Identificación oficial" },
+  { key: "foto_digital", label: "Foto digital" },
+  { key: "curp", label: "CURP (documento)" },
+  { key: "rfc", label: "RFC (documento)" },
+  { key: "nss", label: "NSS (documento)" },
+  { key: "acta_nacimiento", label: "Acta nacimiento" },
+  { key: "comprobante_domicilio", label: "Comprobante domicilio" },
+  { key: "certificado_medico", label: "Certificado médico" },
+  { key: "titulo_profesional", label: "Título/certificaciones" },
+  { key: "carta_recomendacion", label: "Cartas recomendación" },
+  { key: "curriculum_vitae", label: "Currículum" },
+  { key: "carta_no_penales", label: "Carta no penales" },
+  // Not including admin-only/proyectivos/etc in this PDF
+];
+
 async function loadLogoImage() {
   const filePath = path.join(process.cwd(), "public/IMAGOTIPO-IECS-IEDIS.png");
   if (fs.existsSync(filePath)) {
@@ -19,11 +48,8 @@ function safeField(val) {
 }
 
 /**
- * Clean, production-safe solution for displaying MySQL DATE fields
+ * Clean, production-safe solution for displaying MySQL DATE fields.
  * Always outputs dd/mm/yyyy; never uses JS Date local/UTC parsing.
- *
- * @param {string|Date|null} val - The value from Prisma (string 'YYYY-MM-DD' or Date)
- * @returns {string}            - Formatted date dd/mm/yyyy or "-"
  */
 function formatDateField(val) {
   if (!val) return "-";
@@ -52,6 +78,7 @@ export async function GET(req, context) {
   const userId = Number(params.userId);
   if (!userId) return new NextResponse("userId inválido", { status: 400 });
 
+  // Fetch ficha info
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -68,10 +95,56 @@ export async function GET(req, context) {
       puesto: true,
       horarioLaboral: true,
       plantel: { select: { name: true, label: true } },
+      plantelId: true,
     }
   });
   if (!user) return new NextResponse("Usuario no encontrado", { status: 404 });
 
+  // Fetch user's documents and checklist
+  const documents = await prisma.document.findMany({
+    where: { userId: user.id },
+    select: { type: true },
+  });
+  const checklistItems = await prisma.checklistItem.findMany({
+    where: { userId: user.id, required: true },
+    select: { type: true, fulfilled: true },
+  });
+
+  // --- Prepare progress calculation ---
+  // 1. Ficha fields
+  let fichaFilled = 0, fichaTotal = FICHA_KEYS.length;
+  let missingFicha = [];
+  for (const f of FICHA_KEYS) {
+    let val;
+    if (f.key === "plantel") {
+      val = user.plantel?.name || user.plantel?.label || "";
+    } else if (f.key === "fechaIngreso") {
+      val = user.fechaIngreso;
+    } else {
+      val = user[f.key];
+    }
+    if (val && String(val).trim().length > 0) fichaFilled++;
+    else missingFicha.push(f.label);
+  }
+
+  // 2. Documents (map as "fulfilled" per checklist if available, else by uploaded doc type)
+  let docsDone = 0, docsTotal = DOC_KEYS.length;
+  let missingDocs = [];
+  for (const d of DOC_KEYS) {
+    // Check if checklist has it fulfilled, or if a doc of that type exists
+    const fulfilled = 
+      checklistItems.find(c => c.type === d.key && c.fulfilled) ||
+      documents.find(doc => doc.type === d.key);
+    if (fulfilled) docsDone++;
+    else missingDocs.push(d.label);
+  }
+
+  // Compose final progress
+  const totalProgress = fichaFilled + docsDone;
+  const maxProgress = fichaTotal + docsTotal;
+  const progressPct = maxProgress ? Math.round((totalProgress / maxProgress) * 100) : 0;
+
+  // Now draw PDF
   // A4 portrait: 595 x 842
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]);
@@ -163,12 +236,66 @@ export async function GET(req, context) {
   page.drawText("Domicilio fiscal:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.21,0.38,0.67) });
   page.drawText(safeField(user.domicilioFiscal), { x: 160, y, font: fontItal, size: 12, maxWidth: width-170 });
 
-  y -= 56;
+  // ---- PROGRESS BLOCK ----
+  y -= 60;
   page.drawRectangle({
     x: 38, y, width: width - 76, height: 1.2, color: rgb(0.77, 0.85, 0.97)
   });
+  y -= 18;
+  page.drawText("Resumen de expediente y documentos", {
+    x: 50, y, size: 14, font: fontTitle, color: rgb(0.18, 0.32, 0.61)
+  });
+
+  y -= 20;
+  page.drawText(`Progreso total: ${totalProgress} de ${maxProgress} campos (${progressPct}%)`, {
+    x: 50, y, size: 13, font: fontReg, color: rgb(0.23,0.46,0.2)
+  });
+
+  y -= 19;
+
+  // Show list of missing fields if any
+  if (missingFicha.length > 0) {
+    page.drawText("Faltan campos en ficha:", {
+      x: 60, y, size: 12, font: fontItal, color: rgb(0.6,0.16,0.16)
+    });
+    y -= 16;
+    for (const mf of missingFicha) {
+      if (y < 95) { y = 600; }
+      page.drawText("- " + mf, {
+        x: 75, y, size: 12, font: fontReg, color: rgb(0.61,0.13,0.19)
+      });
+      y -= 15;
+    }
+  }
+
+  // Show list of missing docs if any
+  if (missingDocs.length > 0) {
+    if (y < 95) { y = 600; }
+    page.drawText("Faltan documentos digitales:", {
+      x: 60, y, size: 12, font: fontItal, color: rgb(0.6,0.16,0.16)
+    });
+    y -= 16;
+    for (const md of missingDocs) {
+      if (y < 95) { y = 600; }
+      page.drawText("- " + md, {
+        x: 75, y, size: 12, font: fontReg, color: rgb(0.56,0.15,0.21)
+      });
+      y -= 15;
+    }
+  }
+
+  // If everything is complete, print a note!
+  if (missingFicha.length === 0 && missingDocs.length === 0) {
+    page.drawText("¡Expediente digital completo!", {
+      x: 60, y, size: 13, font: fontTitle, color: rgb(0.11,0.62,0.32)
+    });
+    y -= 14;
+  }
 
   // Firmas (bottom)
+  // Make sure y does not overflow footer
+  y = Math.max(y, 160);
+
   const firmasY = 110;
   const firmaW = 140;
   const gap = (width - 3*firmaW) / 4;
