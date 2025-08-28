@@ -6,33 +6,20 @@ import { getSessionFromCookies } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
-// Define all ficha fields (sync with FIELDS in UserFichaTecnicaDrawer)
-const FICHA_KEYS = [
-  { key: "rfc", label: "RFC" },
-  { key: "curp", label: "CURP" },
-  { key: "domicilioFiscal", label: "Domicilio fiscal" },
-  { key: "nss", label: "NSS" },
-  { key: "fechaIngreso", label: "Fecha de ingreso" },
-  { key: "puesto", label: "Puesto" },
-  { key: "horarioLaboral", label: "Horario laboral" },
-  { key: "plantel", label: "Plantel asignado" },
-];
-
-// User docs: only user-uploaded, mapped to meta docs
+// Document checklist steps (match your expediente workflow)
 const DOC_KEYS = [
   { key: "identificacion_oficial", label: "Identificación oficial" },
   { key: "foto_digital", label: "Foto digital" },
-  { key: "curp", label: "CURP (documento)" },
-  { key: "rfc", label: "RFC (documento)" },
-  { key: "nss", label: "NSS (documento)" },
-  { key: "acta_nacimiento", label: "Acta nacimiento" },
+  { key: "curp", label: "CURP" },
+  { key: "rfc", label: "RFC" },
+  { key: "nss", label: "NSS" },
+  { key: "acta_nacimiento", label: "Acta de nacimiento" },
   { key: "comprobante_domicilio", label: "Comprobante domicilio" },
   { key: "certificado_medico", label: "Certificado médico" },
-  { key: "titulo_profesional", label: "Título/certificaciones" },
+  { key: "titulo_profesional", label: "Título/Certificaciones" },
   { key: "carta_recomendacion", label: "Cartas recomendación" },
   { key: "curriculum_vitae", label: "Currículum" },
   { key: "carta_no_penales", label: "Carta no penales" },
-  // Not including admin-only/proyectivos/etc in this PDF
 ];
 
 async function loadLogoImage() {
@@ -47,20 +34,16 @@ function safeField(val) {
   return val && String(val).trim().length > 0 ? String(val) : "-";
 }
 
-/**
- * Clean, production-safe solution for displaying MySQL DATE fields.
- * Always outputs dd/mm/yyyy; never uses JS Date local/UTC parsing.
- */
 function formatDateField(val) {
   if (!val) return "-";
   let y, m, d;
-  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
     [y, m, d] = val.split("-").map(Number);
   } else if (val instanceof Date) {
     const iso = val.toISOString().slice(0, 10);
     [y, m, d] = iso.split("-").map(Number);
   } else {
-    const parts = String(val).slice(0, 10).split("-");
+    const parts = String(val).split("T")[0].split("-");
     [y, m, d] = parts.map(Number);
   }
   if (!y || !m || !d) return "-";
@@ -70,7 +53,6 @@ function formatDateField(val) {
 export async function GET(req, context) {
   const params = await context.params;
   const session = await getSessionFromCookies(req.cookies);
-
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     return new NextResponse("No autorizado", { status: 403 });
   }
@@ -100,7 +82,7 @@ export async function GET(req, context) {
   });
   if (!user) return new NextResponse("Usuario no encontrado", { status: 404 });
 
-  // Fetch user's documents and checklist
+  // Fetch user's documents and checklist (required only)
   const documents = await prisma.document.findMany({
     where: { userId: user.id },
     select: { type: true },
@@ -110,41 +92,20 @@ export async function GET(req, context) {
     select: { type: true, fulfilled: true },
   });
 
-  // --- Prepare progress calculation ---
-  // 1. Ficha fields
-  let fichaFilled = 0, fichaTotal = FICHA_KEYS.length;
-  let missingFicha = [];
-  for (const f of FICHA_KEYS) {
-    let val;
-    if (f.key === "plantel") {
-      val = user.plantel?.name || user.plantel?.label || "";
-    } else if (f.key === "fechaIngreso") {
-      val = user.fechaIngreso;
-    } else {
-      val = user[f.key];
-    }
-    if (val && String(val).trim().length > 0) fichaFilled++;
-    else missingFicha.push(f.label);
-  }
-
-  // 2. Documents (map as "fulfilled" per checklist if available, else by uploaded doc type)
+  // --- Document progress calculation ---
   let docsDone = 0, docsTotal = DOC_KEYS.length;
   let missingDocs = [];
   for (const d of DOC_KEYS) {
-    // Check if checklist has it fulfilled, or if a doc of that type exists
+    // True if checklist fulfilled *or* document exists for this type
     const fulfilled = 
       checklistItems.find(c => c.type === d.key && c.fulfilled) ||
       documents.find(doc => doc.type === d.key);
     if (fulfilled) docsDone++;
     else missingDocs.push(d.label);
   }
+  const progressPct = docsTotal ? Math.round((docsDone / docsTotal) * 100) : 0;
 
-  // Compose final progress
-  const totalProgress = fichaFilled + docsDone;
-  const maxProgress = fichaTotal + docsTotal;
-  const progressPct = maxProgress ? Math.round((totalProgress / maxProgress) * 100) : 0;
-
-  // Now draw PDF
+  // ----- Render PDF -----
   // A4 portrait: 595 x 842
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]);
@@ -194,7 +155,6 @@ export async function GET(req, context) {
 
   y -= 92;
 
-  // Block 1: Name/email/plantel/puesto
   page.drawText("Nombre:", { x: 50, y, font: fontTitle, size: 14, color: rgb(0.12,0.3,0.4) });
   page.drawText(safeField(user.name), { x: 140, y, font: fontReg, size: 14 });
   y -= 27;
@@ -206,94 +166,45 @@ export async function GET(req, context) {
   y -= 27;
   page.drawText("Puesto:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.11,0.31,0.44)});
   page.drawText(safeField(user.puesto), { x: 140, y, font: fontReg, size: 13 });
-
   y -= 36;
 
-  // Block 2: Ingreso, horario
-  page.drawText("Fecha de ingreso:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.12,0.33,0.53)});
-  page.drawText(
-    formatDateField(user.fechaIngreso),
-    { x: 173, y, font: fontReg, size: 13 }
-  );
-  y -= 27;
-  page.drawText("Horario:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.13,0.3,0.45) });
-  page.drawText(safeField(user.horarioLaboral), { x: 140, y, font: fontReg, size: 13 });
-  y -= 39;
-
-  // Block 3: RFC, CURP, NSS
-  page.drawText("RFC:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.20,0.12,0.31)});
-  page.drawText(safeField(user.rfc), { x: 110, y, font: fontReg, size: 12 });
-  y -= 24;
-  page.drawText("CURP:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.20,0.12,0.31) });
-  page.drawText(safeField(user.curp), { x: 110, y, font: fontReg, size: 12 });
-  y -= 24;
-  page.drawText("NSS:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.20,0.12,0.31) });
-  page.drawText(safeField(user.nss), { x: 110, y, font: fontReg, size: 12 });
-
-  y -= 42;
-
-  // Block 4: Domicilio fiscal
-  page.drawText("Domicilio fiscal:", { x: 50, y, font: fontTitle, size: 12, color: rgb(0.21,0.38,0.67) });
-  page.drawText(safeField(user.domicilioFiscal), { x: 160, y, font: fontItal, size: 12, maxWidth: width-170 });
-
-  // ---- PROGRESS BLOCK ----
-  y -= 60;
+  // Document Progress
+  y -= 22;
   page.drawRectangle({
     x: 38, y, width: width - 76, height: 1.2, color: rgb(0.77, 0.85, 0.97)
   });
-  y -= 18;
-  page.drawText("Resumen de expediente y documentos", {
+  y -= 20;
+  page.drawText("Progreso de Expediente Digital", {
     x: 50, y, size: 14, font: fontTitle, color: rgb(0.18, 0.32, 0.61)
   });
 
-  y -= 20;
-  page.drawText(`Progreso total: ${totalProgress} de ${maxProgress} campos (${progressPct}%)`, {
-    x: 50, y, size: 13, font: fontReg, color: rgb(0.23,0.46,0.2)
+  y -= 21;
+  page.drawText(`Documentos entregados: ${docsDone} de ${docsTotal} (${progressPct}%)`, {
+    x: 50, y, size: 13, font: fontReg, color: progressPct === 100 ? rgb(0.12,0.35,0.19) : rgb(0.5,0.22,0.12)
   });
 
-  y -= 19;
+  y -= 18;
 
-  // Show list of missing fields if any
-  if (missingFicha.length > 0) {
-    page.drawText("Faltan campos en ficha:", {
-      x: 60, y, size: 12, font: fontItal, color: rgb(0.6,0.16,0.16)
-    });
-    y -= 16;
-    for (const mf of missingFicha) {
-      if (y < 95) { y = 600; }
-      page.drawText("- " + mf, {
-        x: 75, y, size: 12, font: fontReg, color: rgb(0.61,0.13,0.19)
-      });
-      y -= 15;
-    }
-  }
-
-  // Show list of missing docs if any
   if (missingDocs.length > 0) {
-    if (y < 95) { y = 600; }
-    page.drawText("Faltan documentos digitales:", {
-      x: 60, y, size: 12, font: fontItal, color: rgb(0.6,0.16,0.16)
+    page.drawText("Documentos pendientes:", {
+      x: 60, y, size: 12, font: fontItal, color: rgb(0.7,0.18,0.18)
     });
-    y -= 16;
+    y -= 13;
     for (const md of missingDocs) {
       if (y < 95) { y = 600; }
       page.drawText("- " + md, {
-        x: 75, y, size: 12, font: fontReg, color: rgb(0.56,0.15,0.21)
+        x: 75, y, size: 12, font: fontReg, color: rgb(0.7,0.22,0.18)
       });
-      y -= 15;
+      y -= 12;
     }
-  }
-
-  // If everything is complete, print a note!
-  if (missingFicha.length === 0 && missingDocs.length === 0) {
-    page.drawText("¡Expediente digital completo!", {
-      x: 60, y, size: 13, font: fontTitle, color: rgb(0.11,0.62,0.32)
+  } else {
+    page.drawText("Todos los documentos obligatorios están entregados.", {
+      x: 60, y, size: 13, font: fontTitle, color: rgb(0.14,0.56,0.29)
     });
     y -= 14;
   }
 
   // Firmas (bottom)
-  // Make sure y does not overflow footer
   y = Math.max(y, 160);
 
   const firmasY = 110;
