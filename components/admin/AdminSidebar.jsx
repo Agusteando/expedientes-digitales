@@ -8,14 +8,15 @@ import {
   TableCellsIcon,
   XMarkIcon,
   Bars3Icon,
+  PencilSquareIcon,
 } from "@heroicons/react/24/solid";
-
 import { useState } from "react";
 
 const navs = [
   { id: "user-management", label: "Usuarios", icon: UserGroupIcon },
   { id: "plantel-progress", label: "Progreso", icon: TableCellsIcon },
   { id: "plantel-list-admin", label: "Planteles", icon: BuildingOffice2Icon },
+  { id: "plantel-signature-names", label: "Firmas por Plantel", icon: PencilSquareIcon },
   { id: "plantel-admin-matrix-crud", label: "Admins x Plantel", icon: ShieldCheckIcon },
 ];
 

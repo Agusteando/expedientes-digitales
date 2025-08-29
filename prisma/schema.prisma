@@ -14,10 +14,15 @@ enum Role {
   candidate
 }
 
+
 model Plantel {
   id   Int    @id @default(autoincrement())
   name String @unique
   label String?
+
+  direccion           String?  // Nombre para "Dirección"
+  administracion      String?  // Nombre para "Administración"
+  coordinacionGeneral String?  // Nombre para "Coordinación General"
 
   // One-to-many: “employees” (User → Plantel)
   users User[] @relation("Employees")
@@ -26,13 +31,14 @@ model Plantel {
   admins User[] @relation("PlantelAdmins")
 }
 
+
 model User {
   id              Int       @id @default(autoincrement())
   name            String
   email           String    @unique
-  apellidoPaterno String?
-  apellidoMaterno String?
-  nombres         String?
+  apellidoPaterno String?  @db.VarChar(255)
+  apellidoMaterno String?  @db.VarChar(255)
+  nombres         String?  @db.VarChar(255)
   picture         String?
   passwordHash    String?
   rfc             String?

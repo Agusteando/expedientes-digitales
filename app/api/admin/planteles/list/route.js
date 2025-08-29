@@ -5,20 +5,21 @@ import { getSessionFromCookies } from "@/lib/auth";
 
 export async function GET(req, context) {
   const session = await getSessionFromCookies(req.cookies);
-  console.debug("[planteles/list][GET] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
   if (!session || !["superadmin", "admin"].includes(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
   const planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, label: true }
+    select: {
+      id: true, name: true, label: true,
+      direccion: true, administracion: true, coordinacionGeneral: true
+    }
   });
   return NextResponse.json(planteles);
 }
 
 export async function POST(req, context) {
   const session = await getSessionFromCookies(req.cookies);
-  console.debug("[planteles/list][POST] session:", session ? `{id:${session.id},role:${session.role}}` : "none");
   if (!session || session.role !== "superadmin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }

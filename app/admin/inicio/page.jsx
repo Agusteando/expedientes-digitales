@@ -11,7 +11,8 @@ import PlantelProgressPanel from "@/components/admin/PlantelProgressPanel";
 import PlantelAdminMatrixCrudClient from "@/components/admin/PlantelAdminMatrixCrudClient";
 import AdminInicioClient from "@/components/admin/AdminInicioClient";
 import { stepsExpediente } from "@/components/stepMetaExpediente";
-import { LightBulbIcon } from "@heroicons/react/24/solid";
+import { LightBulbIcon, PencilSquareIcon } from "@heroicons/react/24/solid";
+import PlantelSignatureNamesPanel from "@/components/admin/PlantelSignatureNamesPanel";
 
 // Only non-admin-upload, non-plantel steps (i.e. strictly user-uploaded docs)
 const userChecklistKeys = stepsExpediente.filter(
@@ -39,7 +40,7 @@ export default async function AdminInicioPage({ searchParams }) {
 
   let planteles = await prisma.plantel.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true }
+    select: { id: true, name: true, label: true, direccion: true, administracion: true, coordinacionGeneral: true }
   });
 
   let scopedPlantelIds, plantelesScoped;
@@ -146,7 +147,6 @@ export default async function AdminInicioPage({ searchParams }) {
       checklistByType,
       hasProyectivos: !!docsByType.proyectivos,
       documentsByType: docsByType,
-      // Also pass hasProyectivosAccepted for finer logic (could be used later):
       hasProyectivosAccepted: !!projByUser[u.id],
     };
   });
@@ -226,6 +226,22 @@ export default async function AdminInicioPage({ searchParams }) {
             <section id="plantel-list-admin" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
               <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
                 <PlantelListAdminPanelClient initialPlanteles={planteles} onRefresh={null} />
+              </div>
+            </section>
+            <section id="plantel-signature-names" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">
+              <div className="bg-white/90 shadow-xl border border-cyan-200 rounded-2xl overflow-x-auto p-1 xs:p-2 md:p-6">
+                <div className="flex flex-row items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold text-cyan-900">Firmas por Plantel</h3>
+                  <a
+                    href="#plantel-signature-names"
+                    className="flex items-center gap-2 bg-cyan-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-full shadow transition text-xs sm:text-base"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <PencilSquareIcon className="w-5 h-5" />
+                    Editar firmas/plantel
+                  </a>
+                </div>
+                <PlantelSignatureNamesPanel />
               </div>
             </section>
             <section id="plantel-admin-matrix" className="w-full max-w-7xl mx-auto px-1 xs:px-2 sm:px-4 md:px-6 mb-10">

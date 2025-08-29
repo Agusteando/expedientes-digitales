@@ -6,7 +6,6 @@ import { getSessionFromCookies } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
-// Document checklist steps (match your expediente workflow)
 const DOC_KEYS = [
   { key: "identificacion_oficial", label: "Identificación oficial" },
   { key: "foto_digital", label: "Foto digital" },
@@ -60,7 +59,7 @@ export async function GET(req, context) {
   const userId = Number(params.userId);
   if (!userId) return new NextResponse("userId inválido", { status: 400 });
 
-  // Fetch ficha info
+  // Fetch ficha info + plantel signature names
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -76,7 +75,16 @@ export async function GET(req, context) {
       fechaIngreso: true,
       puesto: true,
       horarioLaboral: true,
-      plantel: { select: { name: true, label: true } },
+      plantel: { 
+        select: { 
+          id: true, 
+          name: true, 
+          label: true,
+          direccion: true, 
+          administracion: true, 
+          coordinacionGeneral: true 
+        } 
+      },
       plantelId: true,
     }
   });
@@ -96,7 +104,6 @@ export async function GET(req, context) {
   let docsDone = 0, docsTotal = DOC_KEYS.length;
   let missingDocs = [];
   for (const d of DOC_KEYS) {
-    // True if checklist fulfilled *or* document exists for this type
     const fulfilled = 
       checklistItems.find(c => c.type === d.key && c.fulfilled) ||
       documents.find(doc => doc.type === d.key);
@@ -104,6 +111,11 @@ export async function GET(req, context) {
     else missingDocs.push(d.label);
   }
   const progressPct = docsTotal ? Math.round((docsDone / docsTotal) * 100) : 0;
+
+  // Gather signature names
+  const firma1 = user.plantel?.direccion?.trim() || "(Por registrar)";
+  const firma2 = user.plantel?.administracion?.trim() || "(Por registrar)";
+  const firma3 = user.plantel?.coordinacionGeneral?.trim() || "(Por registrar)";
 
   // ----- Render PDF -----
   // A4 portrait: 595 x 842
@@ -221,6 +233,10 @@ export async function GET(req, context) {
     x: gap+firmaW/2-32, y: firmasY-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
+  page.drawText(firma1, {
+    x: gap+9, y: firmasY+7,
+    font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
+  });
 
   const adminX = gap*2+firmaW;
   page.drawLine({
@@ -233,6 +249,10 @@ export async function GET(req, context) {
     x: adminX+firmaW/2-47, y: firmasY-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
+  page.drawText(firma2, {
+    x: adminX+9, y: firmasY+7,
+    font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
+  });
 
   const coordX = gap*3+firmaW*2;
   page.drawLine({
@@ -244,6 +264,10 @@ export async function GET(req, context) {
   page.drawText("Coordinación general", {
     x: coordX+firmaW/2-63, y: firmasY-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
+  });
+  page.drawText(firma3, {
+    x: coordX+9, y: firmasY+7,
+    font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
   });
 
   page.drawRectangle({
