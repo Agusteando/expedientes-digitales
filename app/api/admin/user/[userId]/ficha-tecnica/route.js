@@ -4,17 +4,14 @@ import prisma from "@/lib/prisma";
 import { getSessionFromCookies } from "@/lib/auth";
 
 function parseFechaIngreso(val) {
-  // Accepts ""|null (returns null), string "YYYY-MM-DD", Date, or undefined
   if (!val) return null;
   if (val instanceof Date) return val;
   if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-    // Create in UTC (time 00:00:00)
     const parts = val.split("-");
     const d = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2]));
     if (!isNaN(d)) return d;
     return null;
   }
-  // Try parsing as date
   const d = new Date(val);
   return isNaN(d) ? null : d;
 }
@@ -40,16 +37,20 @@ export async function PATCH(req, context) {
   // Defensive: only allow allowed fields
   const fields = [
     "rfc", "curp", "domicilioFiscal", "nss",
-    "fechaIngreso", "puesto", "horarioLaboral", "plantelId"
+    "fechaIngreso", "puesto", "horarioLaboral", "plantelId",
+    "sustituyeA", "fechaBajaSustituido"
   ];
   const toUpdate = {};
   for (const field of fields) {
     if (field in data) toUpdate[field] = data[field];
   }
 
-  // Fix fechaIngreso for Prisma
+  // Fix dates for Prisma
   if ("fechaIngreso" in toUpdate) {
     toUpdate.fechaIngreso = parseFechaIngreso(toUpdate.fechaIngreso);
+  }
+  if ("fechaBajaSustituido" in toUpdate) {
+    toUpdate.fechaBajaSustituido = parseFechaIngreso(toUpdate.fechaBajaSustituido);
   }
 
   // Optional: convert empty plantelId to null
@@ -86,6 +87,8 @@ export async function PATCH(req, context) {
         curp: true,
         domicilioFiscal: true,
         horarioLaboral: true,
+        sustituyeA: true,
+        fechaBajaSustituido: true,
       },
     });
     return NextResponse.json({ ficha: user });

@@ -21,18 +21,9 @@ const DOC_KEYS = [
   { key: "carta_no_penales", label: "Carta no penales" },
 ];
 
-async function loadLogoImage() {
-  const filePath = path.join(process.cwd(), "public/IMAGOTIPO-IECS-IEDIS.png");
-  if (fs.existsSync(filePath)) {
-    return new Uint8Array(fs.readFileSync(filePath));
-  }
-  throw new Error("Logo image not found at /public/IMAGOTIPO-IECS-IEDIS.png");
-}
-
 function safeField(val) {
   return val && String(val).trim().length > 0 ? String(val) : "-";
 }
-
 function formatDateField(val) {
   if (!val) return "-";
   let y, m, d;
@@ -47,6 +38,14 @@ function formatDateField(val) {
   }
   if (!y || !m || !d) return "-";
   return `${d.toString().padStart(2,"0")}/${m.toString().padStart(2,"0")}/${y}`;
+}
+
+async function loadLogoImage() {
+  const filePath = path.join(process.cwd(), "public/IMAGOTIPO-IECS-IEDIS.png");
+  if (fs.existsSync(filePath)) {
+    return new Uint8Array(fs.readFileSync(filePath));
+  }
+  throw new Error("Logo image not found at /public/IMAGOTIPO-IECS-IEDIS.png");
 }
 
 export async function GET(req, context) {
@@ -86,6 +85,8 @@ export async function GET(req, context) {
         } 
       },
       plantelId: true,
+      sustituyeA: true,
+      fechaBajaSustituido: true,
     }
   });
   if (!user) return new NextResponse("Usuario no encontrado", { status: 404 });
@@ -167,25 +168,34 @@ export async function GET(req, context) {
 
   y -= 92;
 
-  page.drawText("Nombre:", { x: 50, y, font: fontTitle, size: 14, color: rgb(0.12,0.3,0.4) });
-  page.drawText(safeField(user.name), { x: 140, y, font: fontReg, size: 14 });
-  y -= 27;
-  page.drawText("Correo:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.17,0.17,0.28) });
-  page.drawText(safeField(user.email), { x: 140, y, font: fontReg, size: 13 });
-  y -= 30;
-  page.drawText("Plantel:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.11,0.31,0.44)});
-  page.drawText(safeField(user.plantel?.label || user.plantel?.name), { x: 140, y, font: fontReg, size: 13 });
-  y -= 27;
-  page.drawText("Puesto:", { x: 50, y, font: fontTitle, size: 13, color: rgb(0.11,0.31,0.44)});
-  page.drawText(safeField(user.puesto), { x: 140, y, font: fontReg, size: 13 });
-  y -= 36;
+  // Block: General Info
+  const infoBlock = [
+    ["Nombre", safeField(user.name)],
+    ["Correo", safeField(user.email)],
+    ["Plantel", safeField(user.plantel?.label || user.plantel?.name)],
+    ["Puesto", safeField(user.puesto)],
+    ["Domicilio fiscal", safeField(user.domicilioFiscal)],
+    ["CURP", safeField(user.curp)],
+    ["RFC", safeField(user.rfc)],
+    ["NSS", safeField(user.nss)],
+    ["Fecha de ingreso", formatDateField(user.fechaIngreso)],
+    ["Horario laboral", safeField(user.horarioLaboral)],
+    ["Sustituye a", safeField(user.sustituyeA)],
+    ["Quién fue baja el", formatDateField(user.fechaBajaSustituido)],
+  ];
+
+  for (const [label, value] of infoBlock) {
+    page.drawText(`${label}:`, { x: 50, y, font: fontTitle, size: 13, color: rgb(0.13,0.27,0.43) });
+    page.drawText(value, { x: 170, y, font: fontReg, size: 13 });
+    y -= 24;
+  }
 
   // Document Progress
-  y -= 22;
+  y -= 10;
   page.drawRectangle({
     x: 38, y, width: width - 76, height: 1.2, color: rgb(0.77, 0.85, 0.97)
   });
-  y -= 20;
+  y -= 16;
   page.drawText("Progreso de Expediente Digital", {
     x: 50, y, size: 14, font: fontTitle, color: rgb(0.18, 0.32, 0.61)
   });
@@ -217,56 +227,62 @@ export async function GET(req, context) {
   }
 
   // Firmas (bottom)
-  y = Math.max(y, 160);
+  y = Math.max(y, 140);
 
-  const firmasY = 110;
+  // Calculate signatures Y offsets so that the middle one is lower
+  const firmasY1 = 110;
+  const firmasY2 = 90; // admin (middle) signature is lower to avoid overlap
+  const firmasY3 = 110;
   const firmaW = 140;
   const gap = (width - 3*firmaW) / 4;
 
+  // Dirección
   page.drawLine({
-    start: { x: gap, y: firmasY },
-    end:   { x: gap+firmaW, y: firmasY },
+    start: { x: gap, y: firmasY1 },
+    end:   { x: gap+firmaW, y: firmasY1 },
     thickness: 1,
     color: rgb(0.44,0.56,0.56)
   });
   page.drawText("Dirección", {
-    x: gap+firmaW/2-32, y: firmasY-18,
+    x: gap+firmaW/2-32, y: firmasY1-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
   page.drawText(firma1, {
-    x: gap+9, y: firmasY+7,
+    x: gap+9, y: firmasY1+7,
     font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
   });
 
+  // Administración
   const adminX = gap*2+firmaW;
   page.drawLine({
-    start: { x: adminX, y: firmasY },
-    end:   { x: adminX+firmaW, y: firmasY },
+    start: { x: adminX, y: firmasY2 },
+    end:   { x: adminX+firmaW, y: firmasY2 },
     thickness: 1,
     color: rgb(0.44,0.56,0.56)
   });
   page.drawText("Administración", {
-    x: adminX+firmaW/2-47, y: firmasY-18,
+    x: adminX+firmaW/2-47, y: firmasY2-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
   page.drawText(firma2, {
-    x: adminX+9, y: firmasY+7,
+    x: adminX+9, y: firmasY2+7,
     font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
   });
 
+  // Coordinación general
   const coordX = gap*3+firmaW*2;
   page.drawLine({
-    start: { x: coordX, y: firmasY },
-    end:   { x: coordX+firmaW, y: firmasY },
+    start: { x: coordX, y: firmasY3 },
+    end:   { x: coordX+firmaW, y: firmasY3 },
     thickness: 1,
     color: rgb(0.44,0.56,0.56)
   });
   page.drawText("Coordinación general", {
-    x: coordX+firmaW/2-63, y: firmasY-18,
+    x: coordX+firmaW/2-63, y: firmasY3-18,
     font: fontItal, size: 12, color: rgb(0.22,0.32,0.52)
   });
   page.drawText(firma3, {
-    x: coordX+9, y: firmasY+7,
+    x: coordX+9, y: firmasY3+7,
     font: fontReg, size: 12, color: rgb(0.16,0.19,0.19)
   });
 

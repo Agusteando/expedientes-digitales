@@ -11,7 +11,9 @@ import {
   ClockIcon,
   ArrowDownOnSquareStackIcon,
   ArrowDownTrayIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  UserIcon,
+  ArrowDownLeftIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
@@ -142,6 +144,8 @@ const FIELDS = [
   { key: "puesto", label: "Puesto", icon: Bars3BottomLeftIcon },
   { key: "horarioLaboral", label: "Horario laboral", icon: ClockIcon },
   { key: "plantelId", label: "Plantel asignado", icon: BuildingLibraryIcon },
+  { key: "sustituyeA", label: "Sustituye a", icon: UserIcon },
+  { key: "fechaBajaSustituido", label: "Quién fue baja el", icon: ArrowDownLeftIcon },
 ];
 
 const FIELD_COUNT = FIELDS.length;
@@ -188,6 +192,8 @@ export default function UserFichaTecnicaDrawer({
             puesto: f.puesto ?? "",
             horarioLaboral: f.horarioLaboral ?? "",
             plantelId: f.plantelId || "",
+            sustituyeA: f.sustituyeA ?? "",
+            fechaBajaSustituido: f.fechaBajaSustituido ? String(f.fechaBajaSustituido).substring(0, 10) : "",
           });
           setIsLoading(false);
           setError("");
@@ -342,12 +348,12 @@ export default function UserFichaTecnicaDrawer({
                     <label className="font-semibold text-xs text-cyan-700 flex items-center gap-1">
                       <f.icon className="w-4 h-4" /> {f.label}
                     </label>
-                    {f.key === "fechaIngreso" ? (
+                    {f.key === "fechaIngreso" || f.key === "fechaBajaSustituido" ? (
                       <input
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                        name="fechaIngreso"
+                        name={f.key}
                         type="date"
-                        value={ficha.fechaIngreso}
+                        value={ficha[f.key]}
                         onChange={handleChange}
                         disabled={!canEdit || isSaving}
                       />
@@ -373,7 +379,6 @@ export default function UserFichaTecnicaDrawer({
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
                       >
                         <option value="">Seleccionar puesto...</option>
-                        {/* PUESTO_OPTIONS alphabetically, unique */}
                         {[...new Set(PUESTO_OPTIONS)].sort((a, b) =>
                           a.trim().localeCompare(b.trim(), "es", {sensitivity: "base"})
                         ).map(opt =>

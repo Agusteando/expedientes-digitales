@@ -23,6 +23,8 @@ export async function GET(req, context) {
         puesto: true,
         horarioLaboral: true,
         plantelId: true,
+        sustituyeA: true,
+        fechaBajaSustituido: true,
       }
     });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

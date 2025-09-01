@@ -57,6 +57,8 @@ model User {
   evaId       String?
   ingressioId String?
   noiId       String?
+  sustituyeA      String?   @db.VarChar(255)
+  fechaBajaSustituido DateTime?
 
   role           Role            @default(candidate)
   isActive       Boolean         @default(true)
