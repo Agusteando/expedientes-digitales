@@ -5,6 +5,17 @@ import { getSessionFromCookies } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
+/**
+ * Ultra-clean, clearly divided, elegant expediente cover.
+ * - Full-page letterhead background (no extra logo)
+ * - Spacious top margin, strong column separation with vertical rule
+ * - Each field has its own row with a subtle divider
+ * - Email / CURP / RFC stay on one line (auto-shrink), eliminating ugly wraps
+ * - Better rhythm, consistent label width, improved vertical spacing
+ * - Signature block anchored to bottom; middle signature slightly lower (-_-)
+ * - Tiny "Signia" credit with logo, bottom-right
+ */
+
 const DOC_KEYS = [
   { key: "identificacion_oficial", label: "Identificación oficial" },
   { key: "foto_digital", label: "Foto digital" },
@@ -40,15 +51,13 @@ function formatDateField(val) {
 }
 
 function ensureFileBytes(filePath, errorHint) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`${errorHint} (${filePath})`);
-  }
+  if (!fs.existsSync(filePath)) throw new Error(`${errorHint} (${filePath})`);
   return new Uint8Array(fs.readFileSync(filePath));
 }
 
 async function loadLetterhead() {
   const filePath = path.join(process.cwd(), "public", "CARTA-VERTICAL (SIMPLE) IECS-IEDIS.jpg");
-  return ensureFileBytes(filePath, "No se encontró la carta/hoja membretada");
+  return ensureFileBytes(filePath, "No se encontró la hoja membretada");
 }
 
 async function fetchExternalImage(url) {
@@ -58,20 +67,21 @@ async function fetchExternalImage(url) {
   return new Uint8Array(buf);
 }
 
+// ---------- Typography / layout utilities ----------
 function wrapText(text, font, size, maxWidth) {
-  const words = String(text).split(/\s+/);
+  const words = String(text ?? "").split(/\s+/);
   const lines = [];
   let line = "";
   for (const w of words) {
-    const test = line.length ? `${line} ${w}` : w;
-    const wWidth = font.widthOfTextAtSize(test, size);
-    if (wWidth <= maxWidth) {
+    const test = line ? `${line} ${w}` : w;
+    if (font.widthOfTextAtSize(test, size) <= maxWidth) {
       line = test;
     } else {
       if (line) lines.push(line);
       if (font.widthOfTextAtSize(w, size) > maxWidth) {
+        // hard-break long tokens
         let chunk = "";
-        for (const ch of w.split("")) {
+        for (const ch of w) {
           const t2 = chunk + ch;
           if (font.widthOfTextAtSize(t2, size) <= maxWidth) chunk = t2;
           else {
@@ -89,56 +99,90 @@ function wrapText(text, font, size, maxWidth) {
   return lines;
 }
 
-function drawFieldRow(opts) {
-  const {
-    page,
-    label,
-    value,
-    x,
-    y,
-    labelFont,
-    valueFont,
-    labelSize,
-    valueSize,
-    labelColor,
-    valueColor,
-    lineMaxWidth,
-    valueOffsetX = 124,
-    rowGapAfter = 16,
-  } = opts;
+function fitFontSizeToWidth(text, font, targetWidth, startSize = 12, minSize = 8) {
+  let size = startSize;
+  while (size > minSize && font.widthOfTextAtSize(text, size) > targetWidth) size -= 0.25;
+  return size;
+}
 
+function drawSectionHeader(page, text, x, y, font, color) {
+  page.drawText(text, { x, y, size: 13.5, font, color });
+  page.drawRectangle({ x, y: y - 7, width: 220, height: 1.2, color, opacity: 0.25 });
+  return y - 24;
+}
+
+/**
+ * Draws a single labeled row with an optional one-line value.
+ * Adds a subtle divider underneath to clearly separate rows.
+ */
+function drawRow({
+  page,
+  x,
+  topY,
+  colWidth,
+  label,
+  value,
+  fonts,
+  sizes,
+  colors,
+  options,
+}) {
+  const { labelFont, valueFont, italFont } = fonts;
+  const { labelSize, valueSize, labelWidth, rowGap, singleLine } = sizes;
+  const { labelColor, valueColor, dividerColor } = colors;
+
+  // Label
   page.drawText(`${label}:`, {
     x,
-    y,
+    y: topY,
     size: labelSize,
     font: labelFont,
     color: labelColor,
   });
 
-  const vX = x + valueOffsetX;
-  const maxWidth = lineMaxWidth - valueOffsetX;
-  const lines = wrapText(value, valueFont, valueSize, maxWidth);
-  let yy = y;
-  lines.forEach((ln, i) => {
-    page.drawText(ln, {
+  // Value
+  const vX = x + labelWidth;
+  const vMax = Math.max(24, colWidth - labelWidth);
+  let lowestY = topY;
+
+  if (singleLine) {
+    const fitted = fitFontSizeToWidth(value, valueFont, vMax, valueSize, 8);
+    const textW = valueFont.widthOfTextAtSize(value, fitted);
+    page.drawText(value, {
       x: vX,
-      y: yy,
-      size: valueSize,
+      y: topY,
+      size: fitted,
       font: valueFont,
       color: valueColor,
     });
-    if (i < lines.length - 1) yy -= valueSize + 3;
+  } else {
+    const lines = wrapText(value, valueFont, valueSize, vMax);
+    let y = topY;
+    for (let i = 0; i < lines.length; i++) {
+      page.drawText(lines[i], {
+        x: vX,
+        y,
+        size: valueSize,
+        font: valueFont,
+        color: valueColor,
+      });
+      if (i < lines.length - 1) y -= valueSize + 2;
+      lowestY = y;
+    }
+  }
+
+  const nextY = Math.min(lowestY, topY) - rowGap;
+
+  // Row divider
+  page.drawRectangle({
+    x,
+    y: nextY + 6,
+    width: colWidth,
+    height: 0.6,
+    color: dividerColor,
   });
 
-  return yy - rowGapAfter;
-}
-
-function fitFontSizeToWidth(text, font, targetWidth, startSize = 11, minSize = 7) {
-  let size = startSize;
-  while (size > minSize && font.widthOfTextAtSize(text, size) > targetWidth) {
-    size -= 0.25;
-  }
-  return size;
+  return nextY - 8; // extra breathing room after the divider
 }
 
 export async function GET(req, context) {
@@ -157,8 +201,6 @@ export async function GET(req, context) {
       id: true,
       name: true,
       email: true,
-      picture: true,
-      role: true,
       rfc: true,
       curp: true,
       domicilioFiscal: true,
@@ -176,7 +218,6 @@ export async function GET(req, context) {
           coordinacionGeneral: true,
         },
       },
-      plantelId: true,
       sustituyeA: true,
       fechaBajaSustituido: true,
     },
@@ -203,266 +244,381 @@ export async function GET(req, context) {
   }
   const progressPct = docsTotal ? Math.round((docsDone / docsTotal) * 100) : 0;
 
+  // Signatures
   const firma1 = user.plantel?.direccion?.trim() || "(Por registrar)";
   const firma2 = user.plantel?.administracion?.trim() || "(Por registrar)";
   const firma3 = user.plantel?.coordinacionGeneral?.trim() || "(Por registrar)";
 
+  // PDF
   const LETTER = [612, 792];
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage(LETTER);
   const { width, height } = page.getSize();
 
+  // Fonts
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontItal = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
+  // Background
   try {
     const letterheadBytes = await loadLetterhead();
     const bgJpg = await pdfDoc.embedJpg(letterheadBytes);
     page.drawImage(bgJpg, { x: 0, y: 0, width, height });
   } catch {}
 
-  const M = 54;
-  const gutter = 30;
-  const colW = (width - M * 2 - gutter) / 2;
+  // Layout constants (spacious)
+  const Mx = 68;           // side margins
+  const MyTop = 200;       // generous top margin
+  const MyBottom = 168;    // reserved for signatures
+  const gutter = 44;       // wide gutter between columns
+  const colW = (width - Mx * 2 - gutter) / 2;
 
-  // Slightly larger top margin (content starts a bit lower)
-  let y = height - 156;
+  const palette = {
+    ink: rgb(0.08, 0.10, 0.12),
+    blue: rgb(0.10, 0.22, 0.40),
+    mute: rgb(0.78, 0.84, 0.90),
+    rule: rgb(0.85, 0.90, 0.95),
+    idColor: rgb(0.10, 0.16, 0.26),
+  };
 
-  const title = "Expediente digital del empleado";
-  page.drawText(title, {
-    x: M,
+  // Title
+  let y = height - MyTop;
+  page.drawText("Expediente digital del empleado", {
+    x: Mx,
     y,
     size: 18,
     font: fontBold,
-    color: rgb(0.12, 0.24, 0.42),
+    color: palette.blue,
   });
-  y -= 8;
+
+  // Progress chip (top-right)
+  const chipText = `${docsDone}/${docsTotal}  •  ${progressPct}%`;
+  const chipSize = 9.6;
+  const chipPadX = 8;
+  const chipPadY = 4;
+  const chipW = fontReg.widthOfTextAtSize(chipText, chipSize) + chipPadX * 2;
+  const chipH = chipSize + chipPadY * 2;
+  const chipX = width - Mx - chipW;
+  const chipY = y - 2;
   page.drawRectangle({
-    x: M,
-    y: y - 6,
-    width: 260,
-    height: 2,
-    color: rgb(0.12, 0.24, 0.42),
-    opacity: 0.3,
-  });
-  y -= 28;
-
-  const infoLeft = [
-    ["Nombre", safeField(user.name)],
-    ["Correo", safeField(user.email)],
-    ["Plantel", safeField(user.plantel?.label || user.plantel?.name)],
-    ["Puesto", safeField(user.puesto)],
-    ["Fecha de ingreso", formatDateField(user.fechaIngreso)],
-    ["Horario laboral", safeField(user.horarioLaboral)],
-  ];
-  const infoRight = [
-    ["Domicilio fiscal", safeField(user.domicilioFiscal)],
-    ["CURP", safeField(user.curp)],
-    ["RFC", safeField(user.rfc)],
-    ["NSS", safeField(user.nss)],
-    ["Sustituye a", safeField(user.sustituyeA)],
-    ["Baja de", formatDateField(user.fechaBajaSustituido)],
-  ];
-
-  let yLeft = y;
-  let yRight = y;
-
-  // Left column
-  for (const [label, value] of infoLeft) {
-    const isCompact = label === "Plantel" || label === "Correo";
-    yLeft = drawFieldRow({
-      page,
-      label,
-      value,
-      x: M,
-      y: yLeft,
-      labelFont: fontBold,
-      valueFont: fontReg,
-      labelSize: 12.2,
-      valueSize: isCompact ? 11.8 : 12.2,
-      labelColor: rgb(0.14, 0.27, 0.45),
-      valueColor: rgb(0.1, 0.1, 0.1),
-      lineMaxWidth: colW,
-      valueOffsetX: 124,
-      rowGapAfter: 16,
-    });
-  }
-
-  // Right column with slightly smaller CURP/RFC values
-  for (const [label, value] of infoRight) {
-    const isIdCode = label === "CURP" || label === "RFC";
-    yRight = drawFieldRow({
-      page,
-      label,
-      value,
-      x: M + colW + gutter,
-      y: yRight,
-      labelFont: fontBold,
-      valueFont: fontReg,
-      labelSize: 12.2,
-      valueSize: isIdCode ? 11 : 12.2,
-      labelColor: rgb(0.14, 0.27, 0.45),
-      valueColor: rgb(0.1, 0.1, 0.1),
-      lineMaxWidth: colW,
-      valueOffsetX: 124,
-      rowGapAfter: 16,
-    });
-  }
-
-  y = Math.min(yLeft, yRight) - 8;
-
-  const panelTop = y;
-  const panelX = M;
-  const panelW = width - M * 2;
-  let panelH = 120;
-  if (missingDocs.length > 0) {
-    const approxLines = missingDocs.length;
-    panelH += Math.min(approxLines * 12, 120);
-  }
-
-  const FOOTER_H = 158;
-  if (panelTop - panelH < FOOTER_H + 24) {
-    panelH = Math.max(110, panelTop - (FOOTER_H + 24));
-  }
-
-  page.drawRectangle({
-    x: panelX,
-    y: panelTop - panelH,
-    width: panelW,
-    height: panelH,
+    x: chipX,
+    y: chipY - chipH + 3,
+    width: chipW,
+    height: chipH,
     color: rgb(0.96, 0.98, 1),
-    opacity: 0.85,
+    borderColor: rgb(0.76, 0.83, 0.93),
+    borderWidth: 1,
   });
-  page.drawRectangle({
-    x: panelX,
-    y: panelTop - panelH,
-    width: panelW,
-    height: panelH,
-    borderColor: rgb(0.69, 0.79, 0.92),
-    borderWidth: 1.2,
-    opacity: 0.95,
-  });
-
-  page.drawText("Expediente digital", {
-    x: panelX + 14,
-    y: panelTop - 28,
-    size: 14.5,
-    font: fontBold,
-    color: rgb(0.16, 0.31, 0.56),
-  });
-
-  const barX = panelX + 14;
-  const barY = panelTop - 56;
-  const barW = panelW - 28;
-  const barH = 10.5;
-
-  page.drawRectangle({ x: barX, y: barY, width: barW, height: barH, color: rgb(0.9, 0.93, 0.97) });
-
-  const fillW = Math.max(2, Math.round((Math.min(100, Math.max(0, progressPct)) / 100) * barW));
-  const fillColor = progressPct === 100 ? rgb(0.15, 0.55, 0.28) : rgb(0.96, 0.63, 0.2);
-  page.drawRectangle({ x: barX, y: barY, width: fillW, height: barH, color: fillColor });
-
-  page.drawText(`Entregados: ${docsDone}/${docsTotal} (${progressPct}%)`, {
-    x: barX,
-    y: barY + 14,
-    size: 11.5,
+  page.drawText(chipText, {
+    x: chipX + chipPadX,
+    y: chipY - chipH + 3 + chipPadY + 1,
+    size: chipSize,
     font: fontReg,
-    color: rgb(0.12, 0.16, 0.23),
+    color: palette.idColor,
   });
 
-  let yy = barY - 18;
+  y -= 18;
+  page.drawRectangle({ x: Mx, y: y - 6, width: width - Mx * 2, height: 0.9, color: palette.rule });
+  y -= 32;
+
+  // Column headers
+  let yL = drawSectionHeader(page, "Datos del empleado", Mx, y, fontBold, palette.blue);
+  let yR = drawSectionHeader(page, "Identificación fiscal y social", Mx + colW + gutter, y, fontBold, palette.blue);
+
+  // Vertical divider to clearly separate columns
+  page.drawRectangle({
+    x: Mx + colW + gutter / 2 - 0.5,
+    y: MyBottom + 110,
+    width: 1,
+    height: y - (MyBottom + 110),
+    color: palette.rule,
+  });
+
+  const fonts = { labelFont: fontBold, valueFont: fontReg, italFont: fontItal };
+  const colors = { labelColor: palette.blue, valueColor: palette.ink, dividerColor: palette.rule };
+
+  // Left column rows
+  const commonSizes = { labelSize: 11.2, valueSize: 12.2, labelWidth: 126, rowGap: 14, singleLine: false };
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Nombre",
+    value: safeField(user.name),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Correo",
+    value: safeField(user.email),
+    fonts,
+    sizes: { ...commonSizes, valueSize: 11.8, singleLine: true }, // keep email on one line
+    colors,
+    options: {},
+  });
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Plantel",
+    value: safeField(user.plantel?.label || user.plantel?.name),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Puesto",
+    value: safeField(user.puesto),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Fecha de ingreso",
+    value: formatDateField(user.fechaIngreso),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+  yL = drawRow({
+    page,
+    x: Mx,
+    topY: yL,
+    colWidth: colW,
+    label: "Horario laboral",
+    value: safeField(user.horarioLaboral),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+
+  // Right column rows (CURP/RFC single-line, smaller)
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "Domicilio fiscal",
+    value: safeField(user.domicilioFiscal),
+    fonts,
+    sizes: { ...commonSizes },
+    colors,
+    options: {},
+  });
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "CURP",
+    value: safeField(user.curp),
+    fonts,
+    sizes: { ...commonSizes, valueSize: 10.4, singleLine: true },
+    colors,
+    options: {},
+  });
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "RFC",
+    value: safeField(user.rfc),
+    fonts,
+    sizes: { ...commonSizes, valueSize: 10.4, singleLine: true },
+    colors,
+    options: {},
+  });
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "NSS",
+    value: safeField(user.nss),
+    fonts,
+    sizes: { ...commonSizes, singleLine: true, valueSize: 11.2 },
+    colors,
+    options: {},
+  });
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "Sustituye a",
+    value: safeField(user.sustituyeA),
+    fonts,
+    sizes: { ...commonSizes, singleLine: true },
+    colors,
+    options: {},
+  });
+  yR = drawRow({
+    page,
+    x: Mx + colW + gutter,
+    topY: yR,
+    colWidth: colW,
+    label: "Baja de",
+    value: formatDateField(user.fechaBajaSustituido),
+    fonts,
+    sizes: { ...commonSizes, singleLine: true },
+    colors,
+    options: {},
+  });
+
+  // Next section baseline (below shorter column)
+  y = Math.min(yL, yR) - 18;
+
+  // Estado del expediente
+  y = drawSectionHeader(page, "Estado del expediente", Mx, y, fontBold, palette.blue);
+
+  const barX = Mx;
+  const barW = width - Mx * 2;
+  const barH = 8.5;
+  const barY = y - 8;
+
+  // Track
+  page.drawRectangle({ x: barX, y: barY, width: barW, height: barH, color: rgb(0.93, 0.95, 0.98) });
+  // Fill
+  const fillW = Math.max(2, Math.round((Math.min(100, Math.max(0, progressPct)) / 100) * barW));
+  page.drawRectangle({
+    x: barX,
+    y: barY,
+    width: fillW,
+    height: barH,
+    color: progressPct === 100 ? rgb(0.17, 0.55, 0.3) : rgb(0.16, 0.40, 0.74),
+  });
+
+  page.drawText(
+    progressPct === 100 ? "Completado" : `Entregados ${docsDone}/${docsTotal} (${progressPct}%)`,
+    { x: barX, y: barY + 12, size: 10.8, font: fontReg, color: palette.idColor }
+  );
+
+  // Missing docs (airy, capped)
+  let listY = barY - 16;
   if (missingDocs.length > 0) {
-    page.drawText("Pendientes:", {
-      x: barX,
-      y: yy,
-      size: 11.5,
-      font: fontItal,
-      color: rgb(0.62, 0.21, 0.21),
-    });
-    yy -= 14;
-    const bulletMaxWidth = barW - 6;
+    page.drawText("Pendientes:", { x: barX, y: listY, size: 10.6, font: fontItal, color: rgb(0.50, 0.20, 0.20) });
+    listY -= 12;
+    const maxList = 6;
+    const bulletMaxWidth = barW - 24;
+    let shown = 0;
     for (const md of missingDocs) {
-      const lines = wrapText(`• ${md}`, fontReg, 11, bulletMaxWidth);
+      if (shown >= maxList || listY < MyBottom + 96) break;
+      const lines = wrapText(`• ${md}`, fontReg, 10.2, bulletMaxWidth);
       for (const ln of lines) {
-        if (yy < panelTop - panelH + 14) break;
-        page.drawText(ln, {
-          x: barX + 6,
-          y: yy,
-          size: 11,
-          font: fontReg,
-          color: rgb(0.49, 0.18, 0.18),
-        });
-        yy -= 12;
+        if (listY < MyBottom + 96) break;
+        page.drawText(ln, { x: barX + 14, y: listY, size: 10.2, font: fontReg, color: rgb(0.40, 0.16, 0.16) });
+        listY -= 11.5;
       }
-      if (yy < panelTop - panelH + 14) break;
+      shown++;
     }
-  } else {
-    page.drawText("Completado", {
-      x: barX,
-      y: yy,
-      size: 12,
-      font: fontBold,
-      color: rgb(0.13, 0.55, 0.3),
-    });
+    if (missingDocs.length > shown) {
+      page.drawText(`+ ${missingDocs.length - shown} más`, {
+        x: barX + 14,
+        y: listY,
+        size: 9.8,
+        font: fontItal,
+        color: rgb(0.35, 0.14, 0.14),
+      });
+    }
   }
 
-  // Signatures — anchored to bottom, middle lowered (-_-)
-  const sigAreaTop = FOOTER_H;
-  const baseLineY = sigAreaTop + 68;
-  const baseNameY = baseLineY - 14;
-  const baseRoleY = baseNameY - 12;
+  // ----- Signatures (anchored to bottom, -_- layout) -----
+  const sigBase = MyBottom;
+  const lineY = sigBase + 72;
+  const nameY = lineY - 14;
+  const roleY = nameY - 12;
 
-  const sigCount = 3;
-  const innerPad = 22;
-  const sigTotalW = width - (M + innerPad) * 2;
-  const sigSlotW = sigTotalW / sigCount;
+  const innerPad = 20;
+  const usableW = width - (Mx + innerPad) * 2;
+  const slotW = usableW / 3;
 
   const signatures = [
     { title: "Dirección", name: firma1 },
-    { title: "Administración", name: firma2 }, // middle (to be lowered)
+    { title: "Administración", name: firma2 }, // center, lowered
     { title: "Coordinación general", name: firma3 },
   ];
 
-  for (let i = 0; i < signatures.length; i++) {
-    const slotX = M + innerPad + i * sigSlotW;
-    const lineW = Math.min(180, sigSlotW - 20);
-    const lineX = slotX + (sigSlotW - lineW) / 2;
+  for (let i = 0; i < 3; i++) {
+    const slotX = Mx + innerPad + i * slotW;
+    const lW = Math.min(200, slotW - 24);
+    const lX = slotX + (slotW - lW) / 2;
 
-    // Lower the middle signature slightly for the -_- layout
-    const deltaY = i === 1 ? -8 : 0;
-    const lineY = baseLineY + deltaY;
-    const nameY = baseNameY + deltaY;
-    const roleY = baseRoleY + deltaY;
+    const delta = i === 1 ? -10 : 0;
 
+    // line
     page.drawLine({
-      start: { x: lineX, y: lineY },
-      end: { x: lineX + lineW, y: lineY },
-      thickness: 1.1,
-      color: rgb(0.36, 0.46, 0.53),
+      start: { x: lX, y: lineY + delta },
+      end: { x: lX + lW, y: lineY + delta },
+      thickness: 1,
+      color: rgb(0.44, 0.54, 0.60),
     });
 
-    const nameMax = lineW - 8;
-    const nameSize = fitFontSizeToWidth(signatures[i].name, fontReg, nameMax, 10.5, 8);
-    const nameTextW = fontReg.widthOfTextAtSize(signatures[i].name, nameSize);
-    page.drawText(signatures[i].name, {
-      x: lineX + (lineW - nameTextW) / 2,
-      y: nameY,
-      size: nameSize,
+    // name
+    const nm = signatures[i].name;
+    const nmMax = lW - 10;
+    const nmSize = fitFontSizeToWidth(nm, fontReg, nmMax, 10.8, 8.2);
+    const nmW = fontReg.widthOfTextAtSize(nm, nmSize);
+    page.drawText(nm, {
+      x: lX + (lW - nmW) / 2,
+      y: nameY + delta,
+      size: nmSize,
       font: fontReg,
-      color: rgb(0.12, 0.15, 0.17),
+      color: rgb(0.12, 0.14, 0.16),
     });
 
-    const roleSize = 10;
-    const roleTextW = fontItal.widthOfTextAtSize(signatures[i].title, roleSize);
-    page.drawText(signatures[i].title, {
-      x: lineX + (lineW - roleTextW) / 2,
-      y: roleY,
-      size: roleSize,
+    // role
+    const rl = signatures[i].title;
+    const rlSize = 10;
+    const rlW = fontItal.widthOfTextAtSize(rl, rlSize);
+    page.drawText(rl, {
+      x: lX + (lW - rlW) / 2,
+      y: roleY + delta,
+      size: rlSize,
       font: fontItal,
-      color: rgb(0.19, 0.29, 0.49),
+      color: rgb(0.20, 0.30, 0.48),
     });
   }
+
+  // Fine baseline above signatures
+  page.drawRectangle({
+    x: Mx,
+    y: sigBase + 98,
+    width: width - Mx * 2,
+    height: 0.8,
+    color: palette.mute,
+    opacity: 0.6,
+  });
+
+  // Generated date (subtle)
+  page.drawText(`Generado: ${formatDateField(new Date())}`, {
+    x: Mx,
+    y: sigBase + 18,
+    size: 8.5,
+    font: fontItal,
+    color: rgb(0.30, 0.34, 0.40),
+  });
 
   // Tiny credit with logo + "Signia"
   try {
@@ -470,45 +626,28 @@ export async function GET(req, context) {
     const signiaPng = await pdfDoc.embedPng(signiaBytes);
     const logoH = 10;
     const logoW = (signiaPng.width / signiaPng.height) * logoH;
-    const creditY = sigAreaTop + 18;
-    const creditX = width - M - 90;
+    const creditY = sigBase + 16;
+    const creditX = width - Mx - 100;
 
-    page.drawImage(signiaPng, {
-      x: creditX,
-      y: creditY,
-      width: logoW,
-      height: logoH,
-      opacity: 0.9,
-    });
-
-    const creditText = "Signia";
-    const cSize = 8;
-    page.drawText(creditText, {
+    page.drawImage(signiaPng, { x: creditX, y: creditY, width: logoW, height: logoH, opacity: 0.92 });
+    page.drawText("Signia", {
       x: creditX + logoW + 6,
       y: creditY + 2,
-      size: cSize,
+      size: 8,
       font: fontReg,
       color: rgb(0.28, 0.32, 0.38),
     });
   } catch {
     page.drawText("Signia", {
-      x: width - M - 50,
-      y: sigAreaTop + 20,
+      x: width - Mx - 50,
+      y: sigBase + 18,
       size: 8,
       font: fontReg,
       color: rgb(0.28, 0.32, 0.38),
     });
   }
 
-  page.drawRectangle({
-    x: M,
-    y: sigAreaTop + 92,
-    width: width - M * 2,
-    height: 0.8,
-    color: rgb(0.7, 0.78, 0.88),
-    opacity: 0.6,
-  });
-
+  // Output
   const pdfBytes = await pdfDoc.save();
   return new NextResponse(Buffer.from(pdfBytes), {
     status: 200,
