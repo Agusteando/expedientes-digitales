@@ -17,8 +17,8 @@ import {
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
-// PUESTO OPTIONS
-const PUESTO_OPTIONS = [
+// Limpia y normaliza la lista de puestos según las instrucciones dadas
+const RAW_PUESTO_OPTIONS = [
   "MUSICA",
   "COORD GRAL",
   "INGLES KII",
@@ -124,7 +124,7 @@ const PUESTO_OPTIONS = [
   "AUX CAFETERIAS ",
   "AUX DOCENTE INGLÉS",
   "GEOGRAFIA",
-  // --------- NUEVOS PUESTOS -----------
+  // NUEVOS PUESTOS AGREGADOS
   "MATENIMIENTO",
   "ADMON ESCOLAR",
   "AUX MERCADOTECNIA",
@@ -133,6 +133,93 @@ const PUESTO_OPTIONS = [
   "INGLES",
   "FC&E"
 ];
+
+// Puestos a eliminar (en mayúsculas, sin tildes para comparación)
+const ELIMINAR_PUESTOS = [
+  "AUX",
+  "AUX L",
+  "DOCENTE",
+  "ENEFERMERA",
+  "INTEDENCIA",
+  "INTENDECIA",
+  "TIT",
+  "COMPUTACION",
+  "COORD PEDAGOCICA",
+  "COORD PED",
+  "INGLES 1"
+];
+
+// Puestos extras a agregar
+const AGREGAR_PUESTOS = [
+  "AUX LAI",
+  "AUX LAII",
+  "AUX LAIII",
+  "AUX LBII",
+  "AUX LBIII",
+  "AUX MA",
+  "AUX MAI",
+  "AUX MAII",
+  "AUX MAIII",
+  "AUX LCI",
+  "AUX LCII",
+  "AUX LCIII",
+  "AUX MB",
+  "AUX MBII",
+  "AUX MC",
+  "AUX MACII",
+  "TIT KI",
+  "VIGILANTE",
+  "PSICÓLOGA",
+  "PSICÓLOGO",
+  "ASESOR LEGAL",
+  "ENFERMERA",
+  "ESPAÑOL 3",
+  "ESPAÑOL KII",
+  "INGLES KI"
+];
+
+// Función de limpieza y normalización
+function cleanPuestoText(txt) {
+  return txt
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+    .toUpperCase()
+    .replace(/[^A-Z0-9 Ñ&]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Elimina los puestos prohibidos y duplicados, y agrega los nuevos puestos faltantes.
+let PUESTO_OPTIONS;
+{
+  // Elimina duplicados, normaliza comparando sin tildes ni espacios extras
+  const eliminarNorm = ELIMINAR_PUESTOS.map(cleanPuestoText);
+
+  // Elimina los TIT (tanto "TIT" como cualquier "TIT " aislado, y otros duplicados)
+  let uniqueSet = new Set();
+  for (const p0 of RAW_PUESTO_OPTIONS) {
+    const p = p0.trim();
+    const norm = cleanPuestoText(p);
+    // "TIT" y "TIT " duplicado
+    if (norm === "TIT" || eliminarNorm.includes(norm)) continue;
+    uniqueSet.add(p);
+  }
+  // Agregar nuevos
+  for (const p of AGREGAR_PUESTOS) uniqueSet.add(p);
+
+  // Elimina duplicados exactos después de agregar (por si acaso)
+  PUESTO_OPTIONS = Array.from(uniqueSet);
+  PUESTO_OPTIONS = PUESTO_OPTIONS.filter(
+    (val, idx, arr) =>
+      arr.findIndex(v =>
+        cleanPuestoText(v) === cleanPuestoText(val)
+      ) === idx
+  );
+
+  // Ordena la lista alfabéticamente, ignorando espacios y tildes, pero preserva mayúsculas y tildes en la visualización
+  PUESTO_OPTIONS.sort((a, b) =>
+    cleanPuestoText(a).localeCompare(cleanPuestoText(b), "es", { sensitivity: "base" })
+  );
+}
 
 // Updated FIELDS: puesto now handled as a select (see render below)
 const FIELDS = [
@@ -379,9 +466,7 @@ export default function UserFichaTecnicaDrawer({
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
                       >
                         <option value="">Seleccionar puesto...</option>
-                        {[...new Set(PUESTO_OPTIONS)].sort((a, b) =>
-                          a.trim().localeCompare(b.trim(), "es", {sensitivity: "base"})
-                        ).map(opt =>
+                        {PUESTO_OPTIONS.map(opt =>
                           <option key={opt.trim()} value={opt.trim()}>{opt.trim()}</option>
                         )}
                       </select>
