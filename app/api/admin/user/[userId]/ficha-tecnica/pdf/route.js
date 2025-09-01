@@ -47,7 +47,6 @@ function ensureFileBytes(filePath, errorHint) {
 }
 
 async function loadLetterhead() {
-  // Usa la hoja membretada como fondo de página completo
   const filePath = path.join(process.cwd(), "public", "CARTA-VERTICAL (SIMPLE) IECS-IEDIS.jpg");
   return ensureFileBytes(filePath, "No se encontró la carta/hoja membretada");
 }
@@ -104,7 +103,8 @@ function drawFieldRow(opts) {
     labelColor,
     valueColor,
     lineMaxWidth,
-    valueOffsetX = 118,
+    valueOffsetX = 124,
+    rowGapAfter = 16,
   } = opts;
 
   page.drawText(`${label}:`, {
@@ -130,7 +130,7 @@ function drawFieldRow(opts) {
     if (i < lines.length - 1) yy -= valueSize + 3;
   });
 
-  return yy;
+  return yy - rowGapAfter;
 }
 
 function fitFontSizeToWidth(text, font, targetWidth, startSize = 11, minSize = 7) {
@@ -223,9 +223,11 @@ export async function GET(req, context) {
   } catch {}
 
   const M = 54;
-  const gutter = 26;
+  const gutter = 30;
   const colW = (width - M * 2 - gutter) / 2;
-  let y = height - 120;
+
+  // Slightly larger top margin (content starts a bit lower)
+  let y = height - 156;
 
   const title = "Expediente digital del empleado";
   page.drawText(title, {
@@ -239,7 +241,7 @@ export async function GET(req, context) {
   page.drawRectangle({
     x: M,
     y: y - 6,
-    width: 220,
+    width: 260,
     height: 2,
     color: rgb(0.12, 0.24, 0.42),
     opacity: 0.3,
@@ -266,7 +268,9 @@ export async function GET(req, context) {
   let yLeft = y;
   let yRight = y;
 
+  // Left column
   for (const [label, value] of infoLeft) {
+    const isCompact = label === "Plantel" || label === "Correo";
     yLeft = drawFieldRow({
       page,
       label,
@@ -276,14 +280,18 @@ export async function GET(req, context) {
       labelFont: fontBold,
       valueFont: fontReg,
       labelSize: 12.2,
-      valueSize: 12.2,
+      valueSize: isCompact ? 11.8 : 12.2,
       labelColor: rgb(0.14, 0.27, 0.45),
       valueColor: rgb(0.1, 0.1, 0.1),
       lineMaxWidth: colW,
-      valueOffsetX: 118,
-    }) - 14;
+      valueOffsetX: 124,
+      rowGapAfter: 16,
+    });
   }
+
+  // Right column with slightly smaller CURP/RFC values
   for (const [label, value] of infoRight) {
+    const isIdCode = label === "CURP" || label === "RFC";
     yRight = drawFieldRow({
       page,
       label,
@@ -293,16 +301,16 @@ export async function GET(req, context) {
       labelFont: fontBold,
       valueFont: fontReg,
       labelSize: 12.2,
-      valueSize: 12.2,
+      valueSize: isIdCode ? 11 : 12.2,
       labelColor: rgb(0.14, 0.27, 0.45),
       valueColor: rgb(0.1, 0.1, 0.1),
       lineMaxWidth: colW,
-      valueOffsetX: 118,
-    }) - 14;
+      valueOffsetX: 124,
+      rowGapAfter: 16,
+    });
   }
 
-  y = Math.min(yLeft, yRight);
-  y -= 10;
+  y = Math.min(yLeft, yRight) - 8;
 
   const panelTop = y;
   const panelX = M;
@@ -313,7 +321,7 @@ export async function GET(req, context) {
     panelH += Math.min(approxLines * 12, 120);
   }
 
-  const FOOTER_H = 150;
+  const FOOTER_H = 158;
   if (panelTop - panelH < FOOTER_H + 24) {
     panelH = Math.max(110, panelTop - (FOOTER_H + 24));
   }
@@ -345,7 +353,7 @@ export async function GET(req, context) {
   });
 
   const barX = panelX + 14;
-  const barY = panelTop - 54;
+  const barY = panelTop - 56;
   const barW = panelW - 28;
   const barH = 10.5;
 
@@ -363,7 +371,7 @@ export async function GET(req, context) {
     color: rgb(0.12, 0.16, 0.23),
   });
 
-  let yy = barY - 16;
+  let yy = barY - 18;
   if (missingDocs.length > 0) {
     page.drawText("Pendientes:", {
       x: barX,
@@ -399,11 +407,11 @@ export async function GET(req, context) {
     });
   }
 
-  // Bloque de firmas — anclado al fondo
+  // Signatures — anchored to bottom, middle lowered (-_-)
   const sigAreaTop = FOOTER_H;
-  const sigLineY = sigAreaTop + 68;
-  const sigNameY = sigLineY - 14;
-  const sigRoleY = sigNameY - 12;
+  const baseLineY = sigAreaTop + 68;
+  const baseNameY = baseLineY - 14;
+  const baseRoleY = baseNameY - 12;
 
   const sigCount = 3;
   const innerPad = 22;
@@ -412,7 +420,7 @@ export async function GET(req, context) {
 
   const signatures = [
     { title: "Dirección", name: firma1 },
-    { title: "Administración", name: firma2 },
+    { title: "Administración", name: firma2 }, // middle (to be lowered)
     { title: "Coordinación general", name: firma3 },
   ];
 
@@ -421,9 +429,15 @@ export async function GET(req, context) {
     const lineW = Math.min(180, sigSlotW - 20);
     const lineX = slotX + (sigSlotW - lineW) / 2;
 
+    // Lower the middle signature slightly for the -_- layout
+    const deltaY = i === 1 ? -8 : 0;
+    const lineY = baseLineY + deltaY;
+    const nameY = baseNameY + deltaY;
+    const roleY = baseRoleY + deltaY;
+
     page.drawLine({
-      start: { x: lineX, y: sigLineY },
-      end: { x: lineX + lineW, y: sigLineY },
+      start: { x: lineX, y: lineY },
+      end: { x: lineX + lineW, y: lineY },
       thickness: 1.1,
       color: rgb(0.36, 0.46, 0.53),
     });
@@ -433,7 +447,7 @@ export async function GET(req, context) {
     const nameTextW = fontReg.widthOfTextAtSize(signatures[i].name, nameSize);
     page.drawText(signatures[i].name, {
       x: lineX + (lineW - nameTextW) / 2,
-      y: sigNameY,
+      y: nameY,
       size: nameSize,
       font: fontReg,
       color: rgb(0.12, 0.15, 0.17),
@@ -443,14 +457,14 @@ export async function GET(req, context) {
     const roleTextW = fontItal.widthOfTextAtSize(signatures[i].title, roleSize);
     page.drawText(signatures[i].title, {
       x: lineX + (lineW - roleTextW) / 2,
-      y: sigRoleY,
+      y: roleY,
       size: roleSize,
       font: fontItal,
       color: rgb(0.19, 0.29, 0.49),
     });
   }
 
-  // Crédito ultra pequeño con logo y texto "Signia"
+  // Tiny credit with logo + "Signia"
   try {
     const signiaBytes = await fetchExternalImage("https://colaborador.casitaapps.com/signia.png");
     const signiaPng = await pdfDoc.embedPng(signiaBytes);
