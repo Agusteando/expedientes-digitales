@@ -17,211 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
-// Limpia y normaliza la lista de puestos según las instrucciones dadas
-const RAW_PUESTO_OPTIONS = [
-  "MUSICA",
-  "COORD GRAL",
-  "INGLES KII",
-  "TIT BI",
-  "COORD PED ",
-  "COMPRAS",
-  "ESPAÑOL KI",
-  "JEFA COCINA",
-  "TIT MBI",
-  "INNOVACION ",
-  "APOYO ADMON",
-  " EXP CORPORAL",
-  "COORD GRAL INGLES",
-  "COORD DEPORTES",
-  "INGLES KIII",
-  "DESARROLLO HUMANO",
-  "COORD GUARDE ME",
-  "COORD PSICOL PA",
-  "AUX DISEÑO",
-  "INGLES 4",
-  "COMANDANTE",
-  "TIT LB ",
-  "TIT LB",
-  "INVENTARIOS",
-  "COORD INGLES PB",
-  "COORD GUARDE TOL",
-  "COORD INGLES PA",
-  "COORD DISEÑO",
-  "AUX DRA",
-  "BIOLOGIA Y QUIMICA",
-  "COORD. INGLES",
-  "COORD MKT TOL",
-  "INGLES 1",
-  "ORIENTADOR",
-  "ESPAÑOL 5 ",
-  "INGLES KI-KII-KIII",
-  "COORD ESPAÑOL PB ",
-  "DIRECTOR ESCOLAR",
-  "INGLÉS 1",
-  "CONTADOR GENERAL",
-  "TIT MB",
-  "COORD MKT ME",
-  "INGLES 3",
-  "ESPAÑOL 4",
-  "ESPAÑOL 2",
-  "COORD PEDAGOCICA",
-  "AUX LCMA",
-  "AUX LC",
-  "AUX MA",
-  "INGLÉS 2",
-  "RH",
-  "ADMON PB",
-  "INTENDENCIA ",
-  "TIT LA",
-  "NUTRIOLOGA",
-  "ESPAÑOL 6",
-  "INTEDENCIA",
-  "ESPAÑOL KIII",
-  "TRABAJADORA SOCIAL",
-  "JEFE DE MTTO",
-  "BANCOS",
-  "QUIMICA",
-  "ADMON PA",
-  "SUB COORD ARTES",
-  "COORD PEDAGOGICO",
-  "COMPUTACION ",
-  "TI ",
-  "AUX L",
-  "MAESTRO DE BASQUETBOL",
-  "AUX MBIIA",
-  "VIGILANTE COMODIN",
-  "AUX INGLÉS",
-  "FCYE & HISTORIA",
-  "BIOLOGIA",
-  "EDUCACION FISICA",
-  "APRECIACIÓN ARTISTICA",
-  "AUX LBI",
-  "COMPUTACIÓN",
-  "ENEFERMERA",
-  "TIT KIII",
-  "TIT KII",
-  "ARTES",
-  "AUX ",
-  "DOCENTE",
-  "TI",
-  "TENIS",
-  "AJEDREZ",
-  "BASQUETBOL",
-  "CHOFER",
-  "AUX BII",
-  "COOR PEDAGOGICO",
-  "SUB COORD DESARROLLO HUMANO",
-  "TOCHO",
-  "AUX RECLUTAMIENTO",
-  "INTENDECIA",
-  "COMPUTACIÓN & TI",
-  "SUB DIRECTOR SEC",
-  "COMODIN",
-  "AUX COMPRAS",
-  "FISICA",
-  "MEDICO ESCOLAR",
-  "COMMUNITY MANAGER",
-  "AUX CAFETERIAS ",
-  "AUX DOCENTE INGLÉS",
-  "GEOGRAFIA",
-  // NUEVOS PUESTOS AGREGADOS
-  "MATENIMIENTO",
-  "ADMON ESCOLAR",
-  "AUX MERCADOTECNIA",
-  "MAKER",
-  "ESPAÑOL",
-  "INGLES",
-  "FC&E"
-];
-
-// Puestos a eliminar (en mayúsculas, sin tildes para comparación)
-const ELIMINAR_PUESTOS = [
-  "AUX",
-  "AUX L",
-  "DOCENTE",
-  "ENEFERMERA",
-  "INTEDENCIA",
-  "INTENDECIA",
-  "TIT",
-  "COMPUTACION",
-  "COORD PEDAGOCICA",
-  "COORD PED",
-  "INGLES 1"
-];
-
-// Puestos extras a agregar
-const AGREGAR_PUESTOS = [
-  "AUX LAI",
-  "AUX LAII",
-  "AUX LAIII",
-  "AUX LBII",
-  "AUX LBIII",
-  "AUX MA",
-  "AUX MAI",
-  "AUX MAII",
-  "AUX MAIII",
-  "AUX LCI",
-  "AUX LCII",
-  "AUX LCIII",
-  "AUX MB",
-  "AUX MBII",
-  "AUX MC",
-  "AUX MACII",
-  "TIT KI",
-  "VIGILANTE",
-  "PSICÓLOGA",
-  "PSICÓLOGO",
-  "ASESOR LEGAL",
-  "ENFERMERA",
-  "ESPAÑOL 3",
-  "ESPAÑOL KII",
-  "INGLES KI"
-];
-
-// Función de limpieza y normalización
-function cleanPuestoText(txt) {
-  return txt
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
-    .toUpperCase()
-    .replace(/[^A-Z0-9 Ñ&]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// Elimina los puestos prohibidos y duplicados, y agrega los nuevos puestos faltantes.
-let PUESTO_OPTIONS;
-{
-  // Elimina duplicados, normaliza comparando sin tildes ni espacios extras
-  const eliminarNorm = ELIMINAR_PUESTOS.map(cleanPuestoText);
-
-  // Elimina los TIT (tanto "TIT" como cualquier "TIT " aislado, y otros duplicados)
-  let uniqueSet = new Set();
-  for (const p0 of RAW_PUESTO_OPTIONS) {
-    const p = p0.trim();
-    const norm = cleanPuestoText(p);
-    // "TIT" y "TIT " duplicado
-    if (norm === "TIT" || eliminarNorm.includes(norm)) continue;
-    uniqueSet.add(p);
-  }
-  // Agregar nuevos
-  for (const p of AGREGAR_PUESTOS) uniqueSet.add(p);
-
-  // Elimina duplicados exactos después de agregar (por si acaso)
-  PUESTO_OPTIONS = Array.from(uniqueSet);
-  PUESTO_OPTIONS = PUESTO_OPTIONS.filter(
-    (val, idx, arr) =>
-      arr.findIndex(v =>
-        cleanPuestoText(v) === cleanPuestoText(val)
-      ) === idx
-  );
-
-  // Ordena la lista alfabéticamente, ignorando espacios y tildes, pero preserva mayúsculas y tildes en la visualización
-  PUESTO_OPTIONS.sort((a, b) =>
-    cleanPuestoText(a).localeCompare(cleanPuestoText(b), "es", { sensitivity: "base" })
-  );
-}
-
-// Updated FIELDS: puesto now handled as a select (see render below)
+// Dynamic Puestos: load active from API for select
 const FIELDS = [
   { key: "rfc", label: "RFC", icon: IdentificationIcon },
   { key: "curp", label: "CURP", icon: KeyIcon },
@@ -256,40 +52,58 @@ export default function UserFichaTecnicaDrawer({
   const [zipDownloading, setZipDownloading] = useState(false);
   const [zipQueued, setZipQueued] = useState(false);
 
+  // Dynamic puestos
+  const [puestos, setPuestos] = useState([]);
+  const [puestosLoading, setPuestosLoading] = useState(false);
+  const [puestoCustom, setPuestoCustom] = useState(false);
+  const [puestoSearch, setPuestoSearch] = useState("");
+
   useEffect(() => {
-    if (open && user) {
+    if (!open || !user) return;
+    async function loadFicha() {
       setIsLoading(true);
       setFicha(null);
       setSuccess(""); setError("");
-      fetch(`/api/admin/user/${user.id}/ficha-tecnica-data`)
-        .then(async res => {
-          const d = await res.json();
-          if (!res.ok) {
-            setError(d.error || "No se puede leer ficha.");
-            setIsLoading(false);
-            return;
-          }
-          const f = d.ficha || {};
-          setFicha({
-            rfc: f.rfc ?? "",
-            curp: f.curp ?? "",
-            domicilioFiscal: f.domicilioFiscal ?? "",
-            nss: f.nss ?? "",
-            fechaIngreso: f.fechaIngreso ? String(f.fechaIngreso).substring(0, 10) : "",
-            puesto: f.puesto ?? "",
-            horarioLaboral: f.horarioLaboral ?? "",
-            plantelId: f.plantelId || "",
-            sustituyeA: f.sustituyeA ?? "",
-            fechaBajaSustituido: f.fechaBajaSustituido ? String(f.fechaBajaSustituido).substring(0, 10) : "",
-          });
-          setIsLoading(false);
-          setError("");
+      try {
+        const res = await fetch(`/api/admin/user/${user.id}/ficha-tecnica-data`);
+        const d = await res.json();
+        if (!res.ok) { setError(d.error || "No se puede leer ficha."); setIsLoading(false); return; }
+        const f = d.ficha || {};
+        setFicha({
+          rfc: f.rfc ?? "",
+          curp: f.curp ?? "",
+          domicilioFiscal: f.domicilioFiscal ?? "",
+          nss: f.nss ?? "",
+          fechaIngreso: f.fechaIngreso ? String(f.fechaIngreso).substring(0, 10) : "",
+          puesto: f.puesto ?? "",
+          horarioLaboral: f.horarioLaboral ?? "",
+          plantelId: f.plantelId || "",
+          sustituyeA: f.sustituyeA ?? "",
+          fechaBajaSustituido: f.fechaBajaSustituido ? String(f.fechaBajaSustituido).substring(0, 10) : "",
         });
-      setPdfDownloading(false);
-      setZipDownloading(false);
-      setZipQueued(false);
+      } catch {
+        setError("No se puede leer ficha.");
+      }
+      setIsLoading(false);
     }
+    loadFicha();
   }, [open, user]);
+
+  useEffect(() => {
+    async function loadPuestos() {
+      if (!open) return;
+      setPuestosLoading(true);
+      try {
+        const r = await fetch("/api/admin/puestos/list?active=1", { cache: "no-store" });
+        const d = await r.json();
+        if (r.ok) setPuestos(d.puestos || []);
+      } catch {
+        // ignore
+      }
+      setPuestosLoading(false);
+    }
+    loadPuestos();
+  }, [open]);
 
   function handleChange(e) {
     setFicha(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -300,11 +114,9 @@ export default function UserFichaTecnicaDrawer({
     setError(""); setSuccess("");
   }
 
-  // Progress: count non-empty fields (plantelId counts if set and mapped)
+  // Progress
   const filledCount = ficha
-    ? FIELDS.filter(({ key }) =>
-        (ficha[key] && String(ficha[key]).trim() !== "")
-      ).length
+    ? FIELDS.filter(({ key }) => (ficha[key] && String(ficha[key]).trim() !== "")).length
     : 0;
   const fichaPct = Math.round((filledCount / FIELDS.length) * 100);
 
@@ -360,11 +172,7 @@ export default function UserFichaTecnicaDrawer({
     setError(""); setSuccess("");
     try {
       const res = await fetch(`/api/admin/user/${user.id}/ficha-tecnica/zip`);
-      if (res.status === 429) {
-        setZipQueued(true);
-        setZipDownloading(false);
-        return;
-      }
+      if (res.status === 429) { setZipQueued(true); setZipDownloading(false); return; }
       if (!res.ok) throw new Error((await res.text()).slice(0,120));
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -380,6 +188,12 @@ export default function UserFichaTecnicaDrawer({
   }
 
   if (!open || !user) return null;
+
+  // Filter puestos by search
+  const puestosFiltered = (puestos || []).filter(p => {
+    if (!puestoSearch.trim()) return true;
+    return p.name.toLowerCase().includes(puestoSearch.toLowerCase());
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex justify-end">
@@ -419,11 +233,9 @@ export default function UserFichaTecnicaDrawer({
                   <div className="w-full h-2 rounded-full bg-cyan-100">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        fichaPct > 90 ? 'bg-emerald-400'
-                        : fichaPct > 50 ? 'bg-cyan-400'
-                        : 'bg-yellow-400'}`
-                      }
-                      style={{width: `${fichaPct}%`}}
+                        fichaPct > 90 ? "bg-emerald-400" : fichaPct > 50 ? "bg-cyan-400" : "bg-yellow-400"
+                      }`}
+                      style={{ width: `${fichaPct}%` }}
                     />
                   </div>
                 </div>
@@ -458,18 +270,51 @@ export default function UserFichaTecnicaDrawer({
                         )}
                       </select>
                     ) : f.key === "puesto" ? (
-                      <select
-                        name="puesto"
-                        value={ficha.puesto}
-                        onChange={handleChange}
-                        disabled={!canEdit || isSaving}
-                        className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                      >
-                        <option value="">Seleccionar puesto...</option>
-                        {PUESTO_OPTIONS.map(opt =>
-                          <option key={opt.trim()} value={opt.trim()}>{opt.trim()}</option>
+                      <>
+                        <div className="flex items-center gap-2 mb-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar puesto..."
+                            value={puestoSearch}
+                            onChange={e => setPuestoSearch(e.target.value)}
+                            className="flex-1 rounded-lg border border-cyan-200 px-3 py-2 text-sm bg-white"
+                            disabled={!canEdit || isSaving}
+                          />
+                          <label className="text-xs flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="accent-cyan-700"
+                              checked={puestoCustom}
+                              onChange={e => setPuestoCustom(e.target.checked)}
+                              disabled={!canEdit || isSaving}
+                            />
+                            Escribir manual
+                          </label>
+                        </div>
+                        {!puestoCustom ? (
+                          <select
+                            name="puesto"
+                            value={ficha.puesto || ""}
+                            onChange={handleChange}
+                            disabled={!canEdit || isSaving || puestosLoading}
+                            className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
+                          >
+                            <option value="">Seleccionar puesto...</option>
+                            {puestosFiltered.map(opt =>
+                              <option key={opt.id} value={opt.name}>{opt.name}</option>
+                            )}
+                          </select>
+                        ) : (
+                          <input
+                            className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
+                            name="puesto"
+                            value={ficha.puesto}
+                            onChange={handleChange}
+                            disabled={!canEdit || isSaving}
+                            placeholder="Escribe el puesto"
+                          />
                         )}
-                      </select>
+                      </>
                     ) : (
                       <input
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
