@@ -14,6 +14,7 @@ import {
   ShieldCheckIcon,
   UserIcon,
   ArrowDownLeftIcon,
+  PlusCircleIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
@@ -31,15 +32,14 @@ const FIELDS = [
   { key: "fechaBajaSustituido", label: "Quién fue baja el", icon: ArrowDownLeftIcon },
 ];
 
-const FIELD_COUNT = FIELDS.length;
-
 export default function UserFichaTecnicaDrawer({
   open,
   user,
   planteles = [],
   canEdit = false,
   editablePlanteles = [],
-  onClose
+  onClose,
+  isSuperadmin = false
 }) {
   const [ficha, setFicha] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -195,6 +195,8 @@ export default function UserFichaTecnicaDrawer({
     return p.name.toLowerCase().includes(puestoSearch.toLowerCase());
   });
 
+  const canTypeCustomPuesto = isSuperadmin; // enforce: only superadmin can free-type puestos
+
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex justify-end">
       <div className="w-full max-w-md h-full bg-white shadow-2xl overflow-y-scroll border-l border-cyan-200 px-0 pt-0 relative">
@@ -280,30 +282,39 @@ export default function UserFichaTecnicaDrawer({
                             className="flex-1 rounded-lg border border-cyan-200 px-3 py-2 text-sm bg-white"
                             disabled={!canEdit || isSaving}
                           />
-                          <label className="text-xs flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              className="accent-cyan-700"
-                              checked={puestoCustom}
-                              onChange={e => setPuestoCustom(e.target.checked)}
-                              disabled={!canEdit || isSaving}
-                            />
-                            Escribir manual
-                          </label>
+                          {canTypeCustomPuesto && (
+                            <label className="text-xs flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                className="accent-cyan-700"
+                                checked={puestoCustom}
+                                onChange={e => setPuestoCustom(e.target.checked)}
+                                disabled={!canEdit || isSaving}
+                              />
+                              Escribir manual
+                            </label>
+                          )}
                         </div>
-                        {!puestoCustom ? (
-                          <select
-                            name="puesto"
-                            value={ficha.puesto || ""}
-                            onChange={handleChange}
-                            disabled={!canEdit || isSaving || puestosLoading}
-                            className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                          >
-                            <option value="">Seleccionar puesto...</option>
-                            {puestosFiltered.map(opt =>
-                              <option key={opt.id} value={opt.name}>{opt.name}</option>
+                        {!canTypeCustomPuesto || !puestoCustom ? (
+                          <>
+                            <select
+                              name="puesto"
+                              value={ficha.puesto || ""}
+                              onChange={handleChange}
+                              disabled={!canEdit || isSaving || puestosLoading}
+                              className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
+                            >
+                              <option value="">Seleccionar puesto...</option>
+                              {puestosFiltered.map(opt =>
+                                <option key={opt.id} value={opt.name}>{opt.name}</option>
+                              )}
+                            </select>
+                            {(!puestosLoading && puestosFiltered.length === 0) && (
+                              <div className="text-[11px] text-slate-500 mt-1">
+                                Catálogo vacío o sin coincidencias. Pide a un superadmin gestionar los puestos en “Catálogo de Puestos”.
+                              </div>
                             )}
-                          </select>
+                          </>
                         ) : (
                           <input
                             className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
@@ -311,7 +322,7 @@ export default function UserFichaTecnicaDrawer({
                             value={ficha.puesto}
                             onChange={handleChange}
                             disabled={!canEdit || isSaving}
-                            placeholder="Escribe el puesto"
+                            placeholder="Escribe el puesto (sólo superadmin)"
                           />
                         )}
                       </>

@@ -9,7 +9,8 @@ export async function GET(req, context) {
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
-  const onlyActive = req.nextUrl.searchParams.get("active") === "1";
+  // For admins, force active-only regardless of query
+  const onlyActive = session.role === "admin" ? true : (req.nextUrl.searchParams.get("active") === "1");
   try {
     const puestos = await prisma.puesto.findMany({
       where: onlyActive ? { active: true } : {},

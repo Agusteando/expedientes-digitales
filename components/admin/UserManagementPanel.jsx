@@ -353,7 +353,6 @@ export default function UserManagementPanel({
         canAssignPlantel={canAssignPlantel}
         onBulkAssign={handleBulkAssign}
         onBulkSetActive={handleBulkSetActive}
-        // bulk approve removed
       />
       <UserDocsDrawer
         open={docsDrawer.open}
@@ -367,6 +366,7 @@ export default function UserManagementPanel({
         canEdit={fichaDrawer.open && fichaDrawer.user && (adminRole === "superadmin" || adminsPlanteles.includes(fichaDrawer.user.plantelId))}
         editablePlanteles={editablePlanteles}
         onClose={closeFichaDrawer}
+        isSuperadmin={adminRole === "superadmin"}
       />
     </section>
   );
