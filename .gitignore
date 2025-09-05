@@ -14,3 +14,5 @@ node_modules/
 
 /app/generated/prisma
 credentials.json
+
+contacts.js

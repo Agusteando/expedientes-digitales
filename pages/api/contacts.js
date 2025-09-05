@@ -1,7 +1,10 @@
 
 import fs from "fs";
 import path from "path";
-import { CONTACTS_FILE_PATH } from "../../lib/contactsPath";
+import contactsPath from "../../lib/contactsPath";
+
+// Interop with CJS default export
+const { CONTACTS_FILE_PATH } = contactsPath;
 
 // Ensure we run on the Node runtime (not Edge)
 export const config = {
