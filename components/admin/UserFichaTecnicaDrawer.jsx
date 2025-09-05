@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   BuildingLibraryIcon,
   IdentificationIcon,
@@ -14,7 +14,11 @@ import {
   ShieldCheckIcon,
   UserIcon,
   ArrowDownLeftIcon,
-  PlusCircleIcon,
+  MagnifyingGlassIcon,
+  ChevronUpDownIcon,
+  XMarkIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 
@@ -32,6 +36,8 @@ const FIELDS = [
   { key: "fechaBajaSustituido", label: "Quién fue baja el", icon: ArrowDownLeftIcon },
 ];
 
+function classNames(...c) { return c.filter(Boolean).join(" "); }
+
 export default function UserFichaTecnicaDrawer({
   open,
   user,
@@ -39,7 +45,7 @@ export default function UserFichaTecnicaDrawer({
   canEdit = false,
   editablePlanteles = [],
   onClose,
-  isSuperadmin = false
+  isSuperadmin = false // not used now, manual entry removed
 }) {
   const [ficha, setFicha] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,8 +61,14 @@ export default function UserFichaTecnicaDrawer({
   // Dynamic puestos
   const [puestos, setPuestos] = useState([]);
   const [puestosLoading, setPuestosLoading] = useState(false);
-  const [puestoCustom, setPuestoCustom] = useState(false);
-  const [puestoSearch, setPuestoSearch] = useState("");
+
+  // Searchable dropdown state
+  const [puestoOpen, setPuestoOpen] = useState(false);
+  const [puestoFilter, setPuestoFilter] = useState("");
+  const [puestoActiveIndex, setPuestoActiveIndex] = useState(-1);
+  const puestoInputRef = useRef(null);
+  const puestoListRef = useRef(null);
+  const puestoButtonRef = useRef(null);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -187,15 +199,105 @@ export default function UserFichaTecnicaDrawer({
     }
   }
 
+  // ---- Searchable Select for Puestos (no manual entry) ----
+  const puestosFiltered = useMemo(() => {
+    const q = puestoFilter.trim().toLowerCase();
+    const list = Array.isArray(puestos) ? puestos : [];
+    if (!q) return list;
+    return list.filter(p => p.name.toLowerCase().includes(q));
+  }, [puestos, puestoFilter]);
+
+  const selectedPuestoInCatalog = useMemo(() => {
+    const v = (ficha?.puesto || "").trim();
+    if (!v) return null;
+    return puestos.find(p => p.name === v) || null;
+  }, [ficha?.puesto, puestos]);
+
+  const isPuestoOutOfCatalog = useMemo(() => {
+    const v = (ficha?.puesto || "").trim();
+    if (!v) return false;
+    return !puestos.some(p => p.name === v);
+  }, [ficha?.puesto, puestos]);
+
+  const closePuestoDropdown = useCallback(() => {
+    setPuestoOpen(false);
+    setPuestoActiveIndex(-1);
+  }, []);
+
+  // Keyboard navigation
+  function handlePuestoKeyDown(e) {
+    if (!puestoOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setPuestoOpen(true);
+        setTimeout(() => puestoInputRef.current?.focus(), 0);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closePuestoDropdown();
+      puestoButtonRef.current?.focus();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setPuestoActiveIndex(i => {
+        const n = puestosFiltered.length;
+        if (n === 0) return -1;
+        return (i + 1) % n;
+      });
+      scrollActiveIntoView();
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setPuestoActiveIndex(i => {
+        const n = puestosFiltered.length;
+        if (n === 0) return -1;
+        return (i - 1 + n) % n;
+      });
+      scrollActiveIntoView();
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const idx = puestoActiveIndex;
+      if (idx >= 0 && idx < puestosFiltered.length) {
+        const sel = puestosFiltered[idx];
+        setFicha(f => ({ ...f, puesto: sel.name }));
+        closePuestoDropdown();
+        puestoButtonRef.current?.focus();
+      }
+      return;
+    }
+  }
+
+  function scrollActiveIntoView() {
+    const listEl = puestoListRef.current;
+    if (!listEl) return;
+    const idx = puestoActiveIndex;
+    if (idx < 0) return;
+    const itemEl = listEl.querySelector(`[data-index="${idx}"]`);
+    if (itemEl && itemEl.scrollIntoView) {
+      itemEl.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  // Click outside to close
+  const dropdownWrapperRef = useRef(null);
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!puestoOpen) return;
+      if (!dropdownWrapperRef.current?.contains(e.target)) {
+        closePuestoDropdown();
+      }
+    }
+    window.addEventListener("mousedown", onDocClick);
+    return () => window.removeEventListener("mousedown", onDocClick);
+  }, [puestoOpen, closePuestoDropdown]);
+
   if (!open || !user) return null;
-
-  // Filter puestos by search
-  const puestosFiltered = (puestos || []).filter(p => {
-    if (!puestoSearch.trim()) return true;
-    return p.name.toLowerCase().includes(puestoSearch.toLowerCase());
-  });
-
-  const canTypeCustomPuesto = isSuperadmin; // enforce: only superadmin can free-type puestos
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex justify-end">
@@ -272,60 +374,135 @@ export default function UserFichaTecnicaDrawer({
                         )}
                       </select>
                     ) : f.key === "puesto" ? (
-                      <>
-                        <div className="flex items-center gap-2 mb-1">
-                          <input
-                            type="text"
-                            placeholder="Filtrar puesto..."
-                            value={puestoSearch}
-                            onChange={e => setPuestoSearch(e.target.value)}
-                            className="flex-1 rounded-lg border border-cyan-200 px-3 py-2 text-sm bg-white"
-                            disabled={!canEdit || isSaving}
-                          />
-                          {canTypeCustomPuesto && (
-                            <label className="text-xs flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                className="accent-cyan-700"
-                                checked={puestoCustom}
-                                onChange={e => setPuestoCustom(e.target.checked)}
-                                disabled={!canEdit || isSaving}
-                              />
-                              Escribir manual
-                            </label>
+                      <div ref={dropdownWrapperRef} className="relative">
+                        {/* Selected button */}
+                        <button
+                          type="button"
+                          ref={puestoButtonRef}
+                          onClick={() => {
+                            if (!canEdit || isSaving) return;
+                            setPuestoOpen(o => !o);
+                            setPuestoFilter("");
+                            setPuestoActiveIndex(-1);
+                            setTimeout(() => puestoInputRef.current?.focus(), 0);
+                          }}
+                          onKeyDown={handlePuestoKeyDown}
+                          disabled={!canEdit || isSaving || puestosLoading}
+                          className={classNames(
+                            "w-full inline-flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base bg-white",
+                            canEdit && !isSaving ? "border-cyan-200 hover:bg-cyan-50" : "border-slate-200 text-slate-500 cursor-not-allowed"
                           )}
-                        </div>
-                        {!canTypeCustomPuesto || !puestoCustom ? (
-                          <>
-                            <select
-                              name="puesto"
-                              value={ficha.puesto || ""}
-                              onChange={handleChange}
-                              disabled={!canEdit || isSaving || puestosLoading}
-                              className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                            >
-                              <option value="">Seleccionar puesto...</option>
-                              {puestosFiltered.map(opt =>
-                                <option key={opt.id} value={opt.name}>{opt.name}</option>
-                              )}
-                            </select>
-                            {(!puestosLoading && puestosFiltered.length === 0) && (
-                              <div className="text-[11px] text-slate-500 mt-1">
-                                Catálogo vacío o sin coincidencias. Pide a un superadmin gestionar los puestos en “Catálogo de Puestos”.
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <input
-                            className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
-                            name="puesto"
-                            value={ficha.puesto}
-                            onChange={handleChange}
-                            disabled={!canEdit || isSaving}
-                            placeholder="Escribe el puesto (sólo superadmin)"
-                          />
+                          aria-haspopup="listbox"
+                          aria-expanded={puestoOpen}
+                          aria-controls="puesto-listbox"
+                        >
+                          <span className="truncate text-left">
+                            {ficha.puesto
+                              ? ficha.puesto
+                              : (puestosLoading ? "Cargando puestos..." : "Seleccionar puesto…")}
+                          </span>
+                          <ChevronUpDownIcon className="w-5 h-5 text-slate-500" />
+                        </button>
+
+                        {/* Out-of-catalog warning */}
+                        {ficha.puesto && isPuestoOutOfCatalog && (
+                          <div className="mt-1 text-[11px] flex items-start gap-1 text-yellow-800 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
+                            <ExclamationTriangleIcon className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>
+                              El puesto seleccionado no está en el catálogo activo. Puedes conservarlo tal cual o elegir uno del catálogo.
+                              Si necesitas editar el catálogo, solicita a un superadmin.
+                            </span>
+                          </div>
                         )}
-                      </>
+
+                        {/* Dropdown */}
+                        {puestoOpen && (
+                          <div className="absolute z-10 mt-1 w-full bg-white border border-cyan-200 rounded-xl shadow-xl">
+                            <div className="p-2 border-b border-cyan-100 bg-cyan-50/40">
+                              <div className="relative">
+                                <MagnifyingGlassIcon className="w-4 h-4 text-cyan-400 absolute left-2 top-2.5" />
+                                <input
+                                  ref={puestoInputRef}
+                                  value={puestoFilter}
+                                  onChange={e => { setPuestoFilter(e.target.value); setPuestoActiveIndex(0); }}
+                                  onKeyDown={handlePuestoKeyDown}
+                                  placeholder="Buscar puesto…"
+                                  className="w-full pl-7 pr-2 py-2 rounded border border-cyan-200 text-sm bg-white"
+                                />
+                                {puestoFilter && (
+                                  <button
+                                    type="button"
+                                    className="absolute right-2 top-1.5 p-1 rounded-full hover:bg-slate-100"
+                                    onClick={() => { setPuestoFilter(""); setPuestoActiveIndex(0); puestoInputRef.current?.focus(); }}
+                                    aria-label="Limpiar"
+                                  >
+                                    <XMarkIcon className="w-4 h-4 text-slate-500" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <ul
+                              id="puesto-listbox"
+                              role="listbox"
+                              ref={puestoListRef}
+                              className="max-h-60 overflow-auto py-1"
+                              aria-label="Opciones de puesto"
+                            >
+                              {puestosFiltered.length === 0 && (
+                                <li className="px-3 py-2 text-sm text-slate-500">Sin coincidencias</li>
+                              )}
+                              {puestosFiltered.map((p, idx) => {
+                                const selected = ficha.puesto === p.name;
+                                const active = puestoActiveIndex === idx;
+                                return (
+                                  <li
+                                    key={p.id}
+                                    role="option"
+                                    aria-selected={selected}
+                                    data-index={idx}
+                                    className={classNames(
+                                      "px-3 py-2 cursor-pointer flex items-center justify-between",
+                                      active ? "bg-cyan-50" : "",
+                                      selected ? "font-semibold text-cyan-800" : "text-slate-800"
+                                    )}
+                                    onMouseEnter={() => setPuestoActiveIndex(idx)}
+                                    onClick={() => {
+                                      setFicha(f => ({ ...f, puesto: p.name }));
+                                      closePuestoDropdown();
+                                      puestoButtonRef.current?.focus();
+                                    }}
+                                  >
+                                    <span className="truncate">{p.name}</span>
+                                    {selected && <CheckCircleIcon className="w-4 h-4 text-emerald-600" />}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            <div className="flex items-center justify-between gap-2 px-2 py-2 border-t border-cyan-100 bg-slate-50/60">
+                              <button
+                                type="button"
+                                className="text-xs px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200"
+                                onClick={() => { setPuestoFilter(""); closePuestoDropdown(); puestoButtonRef.current?.focus(); }}
+                              >
+                                Cerrar
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-3 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-100"
+                                onClick={() => {
+                                  setFicha(f => ({ ...f, puesto: "" }));
+                                  setPuestoFilter("");
+                                  closePuestoDropdown();
+                                  puestoButtonRef.current?.focus();
+                                }}
+                                disabled={!canEdit || isSaving}
+                              >
+                                Quitar selección
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <input
                         className="w-full rounded-lg border border-cyan-200 px-3 py-2 text-base bg-white"
