@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import prisma from "@/lib/prisma";
@@ -270,9 +271,12 @@ export async function GET(req, context) {
   // Layout constants (spacious)
   const Mx = 68;           // side margins
   const MyTop = 200;       // generous top margin
-  const MyBottom = 168;    // reserved for signatures
+  const MyBottom = 48;     // reduced bottom reserve so signatures sit closer to the bottom
   const gutter = 44;       // wide gutter between columns
   const colW = (width - Mx * 2 - gutter) / 2;
+
+  // Minimal debug to verify signature position at runtime
+  console.log("[debug] pdf:ficha-tecnica signatureBaseY", MyBottom, "pageHeight", height);
 
   const palette = {
     ink: rgb(0.08, 0.10, 0.12),
@@ -544,7 +548,7 @@ export async function GET(req, context) {
     }
   }
 
-  // ----- Signatures (anchored to bottom, -_- layout) -----
+  // ----- Signatures (anchored closer to bottom, -_- layout) -----
   const sigBase = MyBottom;
   const lineY = sigBase + 72;
   const nameY = lineY - 14;
