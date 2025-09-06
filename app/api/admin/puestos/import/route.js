@@ -60,8 +60,6 @@ export async function POST(req, context) {
         }
       }
     }
-    // Debug log
-    // eslint-disable-next-line no-console
     console.log("[puestos/import][POST]", { mode, input: items.length, deduped: deduped.length, created, reactivated, unchanged });
 
     return NextResponse.json({ ok: true, stats: { mode, input: items.length, deduped: deduped.length, created, reactivated, unchanged } });

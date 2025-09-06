@@ -29,8 +29,6 @@ export async function PATCH(req, context) {
   }
   try {
     const updated = await prisma.puesto.update({ where: { id }, data: updates });
-    // Debug log
-    // eslint-disable-next-line no-console
     console.log("[puestos/:id][PATCH]", { id, updates });
     return NextResponse.json({ ok: true, puesto: updated });
   } catch (e) {
@@ -49,15 +47,12 @@ export async function DELETE(req, context) {
   if (isNaN(id)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   try {
     await prisma.puesto.delete({ where: { id } });
-    // Debug log
-    // eslint-disable-next-line no-console
     console.log("[puestos/:id][DELETE]", { id, deleted: true });
     return NextResponse.json({ ok: true, deleted: id });
   } catch (e) {
     // If there is a constraint due to unique name use-case, fallback to soft-off
     try {
       await prisma.puesto.update({ where: { id }, data: { active: false } });
-      // eslint-disable-next-line no-console
       console.log("[puestos/:id][DELETE->soft]", { id, deactivated: true });
       return NextResponse.json({ ok: true, deactivated: id });
     } catch (err) {

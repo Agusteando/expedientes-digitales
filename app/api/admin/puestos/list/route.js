@@ -17,8 +17,6 @@ export async function GET(req, context) {
       orderBy: [{ active: "desc" }, { name: "asc" }],
       select: { id: true, name: true, active: true, createdAt: true, updatedAt: true }
     });
-    // Debug log
-    // eslint-disable-next-line no-console
     console.log("[puestos/list][GET] user:", { id: session.id, role: session.role, count: puestos.length, onlyActive });
     return NextResponse.json({ puestos });
   } catch (e) {

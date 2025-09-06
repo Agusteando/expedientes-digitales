@@ -22,8 +22,6 @@ export async function POST(req, context) {
     } else {
       puesto = await prisma.puesto.create({ data: { name, active: true } });
     }
-    // Debug log
-    // eslint-disable-next-line no-console
     console.log("[puestos][POST] created/activated:", { name, id: puesto.id });
     return NextResponse.json({ ok: true, puesto });
   } catch (e) {
