@@ -163,12 +163,14 @@ export default function UserRow({
             </button>
           )
         )}
+        {/* Delete button only for superadmin, grayed out and with extra warnings */}
         {canDelete && (
           <button
-            title="Eliminar usuario"
-            className="inline-flex min-w-[104px] justify-center items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 hover:bg-red-200 border border-red-200 text-red-700 text-xs font-semibold shadow-xs transition-shadow focus:outline-none"
+            title="Eliminar usuario (NO recomendado; mejor usar BAJA)"
+            className="inline-flex min-w-[104px] justify-center items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 border border-red-200 text-red-700 text-xs font-semibold shadow-xs transition-shadow focus:outline-none opacity-50 cursor-not-allowed hover:bg-red-50"
             onClick={() => setConfirmAction({ type: "delete", user })}
             aria-label="Eliminar usuario"
+            style={{ pointerEvents: "auto" }}
           >
             <TrashIcon className="w-4 h-4" /> Eliminar
           </button>
@@ -200,10 +202,14 @@ export default function UserRow({
         {/* SUPERADMIN-ONLY confirmation dialog for delete */}
         {canDelete && confirmAction?.type === "delete" && confirmAction.user.id === user.id && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
-            <div className="bg-white shadow-xl rounded-xl p-6 max-w-xs w-full text-center">
+            <div className="bg-white shadow-xl rounded-xl p-6 max-w-xs w-full text-center border-2 border-red-300">
               <p className="mb-4 text-black font-bold">
-                ¿Seguro que deseas eliminar este usuario?<br />
-                Esta acción no se puede deshacer.
+                <span className="block text-red-700 text-lg mb-2">¡Eliminar es IRREVERSIBLE!</span>
+                ¿Seguro que deseas eliminar este usuario?
+                <br />
+                <span className="text-gray-700 font-normal text-sm">NO recomendado. Usa "baja" para conservar historial.</span>
+                <br />
+                <span className="font-semibold text-red-700">Esta acción NO se puede deshacer.</span>
               </p>
               <div className="flex gap-2 justify-center">
                 <button
@@ -214,7 +220,7 @@ export default function UserRow({
                   className="px-4 py-2 rounded bg-red-700 text-white font-bold"
                   onClick={() => { setConfirmAction(null); if (typeof onDelete === "function") onDelete(user.id); }}
                   disabled={false}
-                >Eliminar</button>
+                >Eliminar permanentemente</button>
               </div>
             </div>
           </div>
