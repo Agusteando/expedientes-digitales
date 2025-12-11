@@ -12,8 +12,8 @@ export async function POST(req, context) {
   const userIdParam = params?.userId;
   const typeParam = params?.type;
 
-  const numericUserId = Number(userIdParam);
-  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+  const userId = Number(userIdParam);
+  if (!Number.isInteger(userId) || userId <= 0) {
     return NextResponse.json({ error: "ID de usuario inválido." }, { status: 400 });
   }
 
@@ -23,6 +23,8 @@ export async function POST(req, context) {
   if (!session || !["admin", "superadmin"].includes(session.role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
+
+  let createdDocumentId = null;
 
   try {
     const formData = await req.formData();
@@ -38,59 +40,65 @@ export async function POST(req, context) {
     const originalName = file.name || "archivo";
     const safeBaseName = originalName.replace(/[^\w.\-]/g, "_");
     const ext = path.extname(safeBaseName) || "";
-    const timestamp = Date.now();
-    const randomPart = Math.floor(Math.random() * 1_000_000);
-    const safeType = type.replace(/[^\w.\-]/g, "_") || "documento";
-    const fileName = `${safeType}-${timestamp}-${randomPart}${ext}`;
+
+    // Determine next version number for this user+type
+    const latestDoc = await prisma.document.findFirst({
+      where: { userId, type },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const nextVersion = (latestDoc?.version ?? 0) + 1;
+
+    // Create the Document first to get a stable ID for the file name
+    const created = await prisma.document.create({
+      data: {
+        userId,
+        type,
+        status: "PENDING",
+        // Temporary placeholder; will be updated after writing the file
+        filePath: "PENDING_PATH",
+        version: nextVersion,
+      },
+      select: { id: true },
+    });
+
+    createdDocumentId = created.id;
 
     const publicRoot = path.join(process.cwd(), "public");
     const destDirAbsolute = path.join(
       publicRoot,
       "storage",
       "documents",
-      String(numericUserId)
+      String(userId)
     );
-
     await fs.mkdir(destDirAbsolute, { recursive: true });
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
+    // Canonical filename: [documentId].[ext], same pattern as other documents
+    const fileName = `${createdDocumentId}${ext}`;
     const destAbsolutePath = path.join(destDirAbsolute, fileName);
-
-    console.log("[admin-upload-doc] Saving file to disk", {
-      userId: numericUserId,
-      type,
-      destAbsolutePath,
-      sizeBytes: buffer.length,
-    });
-
-    await fs.writeFile(destAbsolutePath, buffer);
-
-    const latestDoc = await prisma.document.findFirst({
-      where: { userId: numericUserId, type },
-      orderBy: { version: "desc" },
-      select: { version: true },
-    });
-
-    const nextVersion = (latestDoc?.version ?? 0) + 1;
-
     const filePublicPath = [
       "",
       "storage",
       "documents",
-      String(numericUserId),
+      String(userId),
       fileName,
     ].join("/");
 
-    const document = await prisma.document.create({
-      data: {
-        userId: numericUserId,
-        type,
-        status: "PENDING",
-        filePath: filePublicPath,
-        version: nextVersion,
-      },
+    console.log("[admin-upload-doc] Writing admin document", {
+      userId,
+      type,
+      documentId: createdDocumentId,
+      destAbsolutePath,
+      filePublicPath,
+    });
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    await fs.writeFile(destAbsolutePath, buffer);
+
+    const updated = await prisma.document.update({
+      where: { id: createdDocumentId },
+      data: { filePath: filePublicPath },
       select: {
         id: true,
         userId: true,
@@ -102,22 +110,38 @@ export async function POST(req, context) {
       },
     });
 
-    console.log("[admin-upload-doc] Created document record", {
-      documentId: document.id,
-      userId: numericUserId,
-      type: document.type,
-      version: document.version,
-      filePath: document.filePath,
+    console.log("[admin-upload-doc] Upload complete", {
+      documentId: updated.id,
+      userId: updated.userId,
+      type: updated.type,
+      filePath: updated.filePath,
+      version: updated.version,
     });
 
-    return NextResponse.json({ document });
+    return NextResponse.json({ document: updated });
   } catch (err) {
-    console.error("[admin-upload-doc] Error handling upload", {
+    console.error("[admin-upload-doc] Error during upload", {
       errorMessage: err?.message || String(err),
       stack: err?.stack,
-      userId: numericUserId,
+      userId,
       type,
+      createdDocumentId,
     });
+
+    // Best effort: remove placeholder document if we created one but failed later
+    if (createdDocumentId) {
+      try {
+        await prisma.document.delete({ where: { id: createdDocumentId } });
+        console.log("[admin-upload-doc] Rolled back placeholder document", {
+          documentId: createdDocumentId,
+        });
+      } catch (rollbackErr) {
+        console.error("[admin-upload-doc] Failed to roll back placeholder document", {
+          documentId: createdDocumentId,
+          errorMessage: rollbackErr?.message || String(rollbackErr),
+        });
+      }
+    }
 
     return NextResponse.json(
       { error: "Error al procesar y guardar el archivo." },
