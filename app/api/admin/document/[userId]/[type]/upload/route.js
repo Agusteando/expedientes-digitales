@@ -9,12 +9,15 @@ export const runtime = "nodejs";
 
 export async function POST(req, context) {
   const params = await context.params;
-  const { userId, type } = params || {};
+  const userIdParam = params?.userId;
+  const typeParam = params?.type;
 
-  const numericUserId = Number(userId);
+  const numericUserId = Number(userIdParam);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     return NextResponse.json({ error: "ID de usuario inválido." }, { status: 400 });
   }
+
+  const type = String(typeParam || "documento");
 
   const session = await getSessionFromCookies(req.cookies);
   if (!session || !["admin", "superadmin"].includes(session.role)) {
@@ -37,11 +40,16 @@ export async function POST(req, context) {
     const ext = path.extname(safeBaseName) || "";
     const timestamp = Date.now();
     const randomPart = Math.floor(Math.random() * 1_000_000);
-    const safeType = String(type || "documento").replace(/[^\w.\-]/g, "_") || "documento";
+    const safeType = type.replace(/[^\w.\-]/g, "_") || "documento";
     const fileName = `${safeType}-${timestamp}-${randomPart}${ext}`;
 
     const publicRoot = path.join(process.cwd(), "public");
-    const destDirAbsolute = path.join(publicRoot, "storage", "documents", String(numericUserId));
+    const destDirAbsolute = path.join(
+      publicRoot,
+      "storage",
+      "documents",
+      String(numericUserId)
+    );
 
     await fs.mkdir(destDirAbsolute, { recursive: true });
 
@@ -60,7 +68,7 @@ export async function POST(req, context) {
     await fs.writeFile(destAbsolutePath, buffer);
 
     const latestDoc = await prisma.document.findFirst({
-      where: { userId: numericUserId, type: String(type) },
+      where: { userId: numericUserId, type },
       orderBy: { version: "desc" },
       select: { version: true },
     });
@@ -78,7 +86,7 @@ export async function POST(req, context) {
     const document = await prisma.document.create({
       data: {
         userId: numericUserId,
-        type: String(type),
+        type,
         status: "PENDING",
         filePath: filePublicPath,
         version: nextVersion,

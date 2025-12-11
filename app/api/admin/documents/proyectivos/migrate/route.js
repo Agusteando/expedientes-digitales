@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(req, context) {
   const params = await context.params;
-  void params; // params are unused for this route but awaited per convention.
+  void params; // No route params for this endpoint; kept to follow the convention.
 
   const session = await getSessionFromCookies(req.cookies);
   if (!session || session.role !== "superadmin") {
@@ -46,7 +46,6 @@ export async function POST(req, context) {
       const relativeOld = rawPath.replace(/^\/+/, "");
 
       if (!relativeOld.startsWith("uploads")) {
-        // Defensive: query should already ensure this, but keep a log just in case.
         console.log("[migrate-proyectivos] Skipping non-uploads path", {
           documentId: doc.id,
           userId: doc.userId,
@@ -117,7 +116,6 @@ export async function POST(req, context) {
           errorMessage: updateErr?.message || String(updateErr),
         });
         updateErrors += 1;
-        // Keep both old and new files so the original path remains valid.
         continue;
       }
 
