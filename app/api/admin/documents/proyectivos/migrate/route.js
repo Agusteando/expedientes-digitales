@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(req, context) {
   const params = await context.params;
-  void params; // No dynamic params here; kept for consistency with other routes.
+  void params; // No dynamic params for this endpoint; kept for convention.
 
   const session = await getSessionFromCookies(req.cookies);
   if (!session || session.role !== "superadmin") {
@@ -34,8 +34,10 @@ export async function POST(req, context) {
       },
     });
 
-    const publicRoot = path.join(process.cwd(), "public");
+    // Legacy root where old proyectivos lived: ./uploads
     const legacyUploadsRoot = path.join(process.cwd(), "uploads");
+    // Canonical root for all documents: ./storage/documents
+    const storageRoot = path.join(process.cwd(), "storage");
 
     let migrated = 0;
     let skippedMissingFile = 0;
@@ -44,7 +46,7 @@ export async function POST(req, context) {
 
     for (const doc of docs) {
       const rawPath = doc.filePath || "";
-      const relativeOld = rawPath.replace(/^\/+/, ""); // strip leading slash if present
+      const relativeOld = rawPath.replace(/^\/+/, ""); // strip leading slash
 
       if (!relativeOld.startsWith("uploads")) {
         console.log("[migrate-proyectivos] Skipping non-uploads filePath", {
@@ -56,7 +58,7 @@ export async function POST(req, context) {
       }
 
       // Map DB path /uploads/... to actual legacy disk location ./uploads/...
-      const fragments = relativeOld.split("/").slice(1); // drop the leading "uploads" segment
+      const fragments = relativeOld.split("/").slice(1); // drop "uploads"
       const legacyRelative = path.join(...fragments);
       const legacyAbsolutePath = path.join(legacyUploadsRoot, legacyRelative);
 
@@ -82,19 +84,31 @@ export async function POST(req, context) {
       }
 
       const ext = path.extname(legacyAbsolutePath) || "";
-      // Same canonical structure as new uploads: storage/documents/[userId]/[documentId].[ext]
+      // Canonical structure: storage/documents/[userId]/[documentId].[ext]
       const newFileName = `${doc.id}${ext}`;
-      const destRelative = ["storage", "documents", String(doc.userId), newFileName].join("/");
-      const destAbsolutePath = path.join(publicRoot, destRelative);
+      const destDirAbsolute = path.join(
+        storageRoot,
+        "documents",
+        String(doc.userId)
+      );
+      const destAbsolutePath = path.join(destDirAbsolute, newFileName);
+      const destRelativeForDb = [
+        "",
+        "storage",
+        "documents",
+        String(doc.userId),
+        newFileName,
+      ].join("/");
 
       try {
-        await fs.mkdir(path.dirname(destAbsolutePath), { recursive: true });
+        await fs.mkdir(destDirAbsolute, { recursive: true });
 
         console.log("[migrate-proyectivos] Copying legacy proyectivos", {
           documentId: doc.id,
           userId: doc.userId,
           from: legacyAbsolutePath,
           to: destAbsolutePath,
+          newFilePath: destRelativeForDb,
         });
 
         await fs.copyFile(legacyAbsolutePath, destAbsolutePath);
@@ -110,22 +124,20 @@ export async function POST(req, context) {
         continue;
       }
 
-      const newPublicPath = `/${destRelative}`; // exposed path for the frontend
-
       try {
         await prisma.document.update({
           where: { id: doc.id },
-          data: { filePath: newPublicPath },
+          data: { filePath: destRelativeForDb },
         });
       } catch (updateErr) {
         console.error("[migrate-proyectivos] Error updating document record", {
           documentId: doc.id,
           userId: doc.userId,
-          newFilePath: newPublicPath,
+          newFilePath: destRelativeForDb,
           errorMessage: updateErr?.message || String(updateErr),
         });
         updateErrors += 1;
-        // Keep both files so the original path still works.
+        // Keep both files so the original path stays valid.
         continue;
       }
 

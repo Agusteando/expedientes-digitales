@@ -25,6 +25,7 @@ export async function POST(req, context) {
   }
 
   let createdDocumentId = null;
+  let destAbsolutePath = null;
 
   try {
     const formData = await req.formData();
@@ -55,7 +56,6 @@ export async function POST(req, context) {
         userId,
         type,
         status: "PENDING",
-        // Temporary placeholder; will be updated after writing the file
         filePath: "PENDING_PATH",
         version: nextVersion,
       },
@@ -64,18 +64,19 @@ export async function POST(req, context) {
 
     createdDocumentId = created.id;
 
-    const publicRoot = path.join(process.cwd(), "public");
+    // Root-level storage (NOT public): ./storage/documents/[userId]/[documentId].[ext]
+    const storageRoot = path.join(process.cwd(), "storage");
     const destDirAbsolute = path.join(
-      publicRoot,
-      "storage",
+      storageRoot,
       "documents",
       String(userId)
     );
     await fs.mkdir(destDirAbsolute, { recursive: true });
 
-    // Canonical filename: [documentId].[ext], same pattern as other documents
     const fileName = `${createdDocumentId}${ext}`;
-    const destAbsolutePath = path.join(destDirAbsolute, fileName);
+    destAbsolutePath = path.join(destDirAbsolute, fileName);
+
+    // URL path exposed to the browser; your web server should map /storage -> ./storage
     const filePublicPath = [
       "",
       "storage",
@@ -126,9 +127,10 @@ export async function POST(req, context) {
       userId,
       type,
       createdDocumentId,
+      destAbsolutePath,
     });
 
-    // Best effort: remove placeholder document if we created one but failed later
+    // Best effort cleanup: delete placeholder document and file if they were created
     if (createdDocumentId) {
       try {
         await prisma.document.delete({ where: { id: createdDocumentId } });
@@ -139,6 +141,20 @@ export async function POST(req, context) {
         console.error("[admin-upload-doc] Failed to roll back placeholder document", {
           documentId: createdDocumentId,
           errorMessage: rollbackErr?.message || String(rollbackErr),
+        });
+      }
+    }
+
+    if (destAbsolutePath) {
+      try {
+        await fs.unlink(destAbsolutePath);
+        console.log("[admin-upload-doc] Removed partially written file", {
+          destAbsolutePath,
+        });
+      } catch (unlinkErr) {
+        console.error("[admin-upload-doc] Failed to remove partially written file", {
+          destAbsolutePath,
+          errorMessage: unlinkErr?.message || String(unlinkErr),
         });
       }
     }
