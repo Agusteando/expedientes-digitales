@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import prisma from "@/lib/prisma";
@@ -15,6 +14,11 @@ import path from "path";
  * - Better rhythm, consistent label width, improved vertical spacing
  * - Signature block anchored to bottom; middle signature slightly lower (-_-)
  * - Tiny "Signia" credit with logo, bottom-right
+ *
+ * IMPORTANT FIX:
+ * pdf-lib StandardFonts (Helvetica, etc.) use WinAnsi encoding and will crash on
+ * unsupported Unicode chars (e.g. Cyrillic "А"). We sanitize/transliterate text
+ * before measuring or drawing it.
  */
 
 const DOC_KEYS = [
@@ -32,9 +36,102 @@ const DOC_KEYS = [
   { key: "carta_no_penales", label: "Carta no penales" },
 ];
 
-function safeField(val) {
-  return val && String(val).trim().length > 0 ? String(val) : "-";
+// Map common confusable Cyrillic/Unicode chars to Latin equivalents.
+// This prevents WinAnsi crashes for visually similar chars like Cyrillic "А".
+const CONFUSABLE_CHAR_MAP = {
+  // Cyrillic uppercase -> Latin
+  А: "A",
+  В: "B",
+  С: "C",
+  Е: "E",
+  Н: "H",
+  К: "K",
+  М: "M",
+  О: "O",
+  Р: "P",
+  Т: "T",
+  Х: "X",
+  У: "Y",
+  І: "I",
+  Ѕ: "S",
+  Ј: "J",
+  // Cyrillic lowercase -> Latin
+  а: "a",
+  е: "e",
+  о: "o",
+  р: "p",
+  с: "c",
+  у: "y",
+  х: "x",
+  і: "i",
+  ј: "j",
+  ѕ: "s",
+  к: "k",
+  м: "m",
+  н: "h",
+  в: "b",
+  т: "t",
+  // punctuation/typography fallbacks
+  "\u2013": "-", // en dash
+  "\u2014": "-", // em dash
+  "\u2018": "'",
+  "\u2019": "'",
+  "\u201C": '"',
+  "\u201D": '"',
+  "\u2026": "...",
+  "\u00A0": " ", // nbsp
+};
+
+function toWinAnsiSafeText(input) {
+  if (input == null) return "-";
+
+  let text = String(input);
+
+  // Normalize composition first (keeps accented Latin chars where possible)
+  try {
+    text = text.normalize("NFC");
+  } catch { }
+
+  // Replace known confusables
+  text = Array.from(text)
+    .map((ch) => CONFUSABLE_CHAR_MAP[ch] ?? ch)
+    .join("");
+
+  // Final pass: keep printable ASCII + Latin-1/WinAnsi-ish chars.
+  // Replace anything else with "?" to avoid pdf-lib WinAnsi encode crashes.
+  let out = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+
+    // Common safe ranges for StandardFonts/WinAnsi usage:
+    // - Tab/newline/carriage return (rare here, but harmless)
+    // - Basic ASCII printable
+    // - Latin-1 supplement (includes many accented chars used in Spanish)
+    // - Bullet "•" U+2022 (commonly supported by WinAnsi cp1252)
+    if (
+      code === 9 ||
+      code === 10 ||
+      code === 13 ||
+      (code >= 32 && code <= 126) ||
+      (code >= 160 && code <= 255) ||
+      code === 0x2022
+    ) {
+      out += ch;
+    } else {
+      out += "?";
+    }
+  }
+
+  // Collapse weird whitespace sequences
+  out = out.replace(/[ \t]+/g, " ").trim();
+
+  return out.length ? out : "-";
 }
+
+function safeField(val) {
+  return val && String(val).trim().length > 0 ? toWinAnsiSafeText(String(val)) : "-";
+}
+
 function formatDateField(val) {
   if (!val) return "-";
   let y, m, d;
@@ -70,9 +167,11 @@ async function fetchExternalImage(url) {
 
 // ---------- Typography / layout utilities ----------
 function wrapText(text, font, size, maxWidth) {
-  const words = String(text ?? "").split(/\s+/);
+  const safe = toWinAnsiSafeText(text);
+  const words = safe.split(/\s+/);
   const lines = [];
   let line = "";
+
   for (const w of words) {
     const test = line ? `${line} ${w}` : w;
     if (font.widthOfTextAtSize(test, size) <= maxWidth) {
@@ -96,18 +195,24 @@ function wrapText(text, font, size, maxWidth) {
       }
     }
   }
+
   if (line) lines.push(line);
   return lines;
 }
 
 function fitFontSizeToWidth(text, font, targetWidth, startSize = 12, minSize = 8) {
+  const safe = toWinAnsiSafeText(text);
   let size = startSize;
-  while (size > minSize && font.widthOfTextAtSize(text, size) > targetWidth) size -= 0.25;
+  while (size > minSize && font.widthOfTextAtSize(safe, size) > targetWidth) size -= 0.25;
   return size;
 }
 
+function drawSafeText(page, text, options) {
+  page.drawText(toWinAnsiSafeText(text), options);
+}
+
 function drawSectionHeader(page, text, x, y, font, color) {
-  page.drawText(text, { x, y, size: 13.5, font, color });
+  drawSafeText(page, text, { x, y, size: 13.5, font, color });
   page.drawRectangle({ x, y: y - 7, width: 220, height: 1.2, color, opacity: 0.25 });
   return y - 24;
 }
@@ -128,12 +233,15 @@ function drawRow({
   colors,
   options,
 }) {
-  const { labelFont, valueFont, italFont } = fonts;
+  const { labelFont, valueFont, italFont } = fonts; // italFont kept for compatibility
   const { labelSize, valueSize, labelWidth, rowGap, singleLine } = sizes;
   const { labelColor, valueColor, dividerColor } = colors;
 
+  const safeLabel = toWinAnsiSafeText(label);
+  const safeValue = toWinAnsiSafeText(value);
+
   // Label
-  page.drawText(`${label}:`, {
+  page.drawText(`${safeLabel}:`, {
     x,
     y: topY,
     size: labelSize,
@@ -147,9 +255,8 @@ function drawRow({
   let lowestY = topY;
 
   if (singleLine) {
-    const fitted = fitFontSizeToWidth(value, valueFont, vMax, valueSize, 8);
-    const textW = valueFont.widthOfTextAtSize(value, fitted);
-    page.drawText(value, {
+    const fitted = fitFontSizeToWidth(safeValue, valueFont, vMax, valueSize, 8);
+    page.drawText(safeValue, {
       x: vX,
       y: topY,
       size: fitted,
@@ -157,7 +264,7 @@ function drawRow({
       color: valueColor,
     });
   } else {
-    const lines = wrapText(value, valueFont, valueSize, vMax);
+    const lines = wrapText(safeValue, valueFont, valueSize, vMax);
     let y = topY;
     for (let i = 0; i < lines.length; i++) {
       page.drawText(lines[i], {
@@ -246,9 +353,9 @@ export async function GET(req, context) {
   const progressPct = docsTotal ? Math.round((docsDone / docsTotal) * 100) : 0;
 
   // Signatures
-  const firma1 = user.plantel?.direccion?.trim() || "(Por registrar)";
-  const firma2 = user.plantel?.administracion?.trim() || "(Por registrar)";
-  const firma3 = user.plantel?.coordinacionGeneral?.trim() || "(Por registrar)";
+  const firma1 = safeField(user.plantel?.direccion?.trim() || "(Por registrar)");
+  const firma2 = safeField(user.plantel?.administracion?.trim() || "(Por registrar)");
+  const firma3 = safeField(user.plantel?.coordinacionGeneral?.trim() || "(Por registrar)");
 
   // PDF
   const LETTER = [612, 792];
@@ -256,7 +363,7 @@ export async function GET(req, context) {
   const page = pdfDoc.addPage(LETTER);
   const { width, height } = page.getSize();
 
-  // Fonts
+  // Fonts (StandardFonts => WinAnsi only, so all text must be sanitized)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontItal = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
@@ -266,13 +373,13 @@ export async function GET(req, context) {
     const letterheadBytes = await loadLetterhead();
     const bgJpg = await pdfDoc.embedJpg(letterheadBytes);
     page.drawImage(bgJpg, { x: 0, y: 0, width, height });
-  } catch {}
+  } catch { }
 
   // Layout constants (spacious)
-  const Mx = 68;           // side margins
-  const MyTop = 200;       // generous top margin
-  const MyBottom = 48;     // reduced bottom reserve so signatures sit closer to the bottom
-  const gutter = 44;       // wide gutter between columns
+  const Mx = 68; // side margins
+  const MyTop = 200; // generous top margin
+  const MyBottom = 48; // reduced bottom reserve so signatures sit closer to the bottom
+  const gutter = 44; // wide gutter between columns
   const colW = (width - Mx * 2 - gutter) / 2;
 
   // Minimal debug to verify signature position at runtime
@@ -288,7 +395,7 @@ export async function GET(req, context) {
 
   // Title
   let y = height - MyTop;
-  page.drawText("Expediente digital del empleado", {
+  drawSafeText(page, "Expediente digital del empleado", {
     x: Mx,
     y,
     size: 18,
@@ -297,7 +404,7 @@ export async function GET(req, context) {
   });
 
   // Progress chip (top-right)
-  const chipText = `${docsDone}/${docsTotal}  •  ${progressPct}%`;
+  const chipText = toWinAnsiSafeText(`${docsDone}/${docsTotal}  •  ${progressPct}%`);
   const chipSize = 9.6;
   const chipPadX = 8;
   const chipPadY = 4;
@@ -328,7 +435,14 @@ export async function GET(req, context) {
 
   // Column headers
   let yL = drawSectionHeader(page, "Datos del empleado", Mx, y, fontBold, palette.blue);
-  let yR = drawSectionHeader(page, "Identificación fiscal y social", Mx + colW + gutter, y, fontBold, palette.blue);
+  let yR = drawSectionHeader(
+    page,
+    "Identificación fiscal y social",
+    Mx + colW + gutter,
+    y,
+    fontBold,
+    palette.blue
+  );
 
   // Vertical divider to clearly separate columns
   page.drawRectangle({
@@ -514,7 +628,8 @@ export async function GET(req, context) {
     color: progressPct === 100 ? rgb(0.17, 0.55, 0.3) : rgb(0.16, 0.40, 0.74),
   });
 
-  page.drawText(
+  drawSafeText(
+    page,
     progressPct === 100 ? "Completado" : `Entregados ${docsDone}/${docsTotal} (${progressPct}%)`,
     { x: barX, y: barY + 12, size: 10.8, font: fontReg, color: palette.idColor }
   );
@@ -522,23 +637,39 @@ export async function GET(req, context) {
   // Missing docs (airy, capped)
   let listY = barY - 16;
   if (missingDocs.length > 0) {
-    page.drawText("Pendientes:", { x: barX, y: listY, size: 10.6, font: fontItal, color: rgb(0.50, 0.20, 0.20) });
+    drawSafeText(page, "Pendientes:", {
+      x: barX,
+      y: listY,
+      size: 10.6,
+      font: fontItal,
+      color: rgb(0.50, 0.20, 0.20),
+    });
     listY -= 12;
+
     const maxList = 6;
     const bulletMaxWidth = barW - 24;
     let shown = 0;
+
     for (const md of missingDocs) {
       if (shown >= maxList || listY < MyBottom + 96) break;
-      const lines = wrapText(`• ${md}`, fontReg, 10.2, bulletMaxWidth);
+
+      const lines = wrapText(`• ${toWinAnsiSafeText(md)}`, fontReg, 10.2, bulletMaxWidth);
       for (const ln of lines) {
         if (listY < MyBottom + 96) break;
-        page.drawText(ln, { x: barX + 14, y: listY, size: 10.2, font: fontReg, color: rgb(0.40, 0.16, 0.16) });
+        page.drawText(ln, {
+          x: barX + 14,
+          y: listY,
+          size: 10.2,
+          font: fontReg,
+          color: rgb(0.40, 0.16, 0.16),
+        });
         listY -= 11.5;
       }
       shown++;
     }
+
     if (missingDocs.length > shown) {
-      page.drawText(`+ ${missingDocs.length - shown} más`, {
+      drawSafeText(page, `+ ${missingDocs.length - shown} más`, {
         x: barX + 14,
         y: listY,
         size: 9.8,
@@ -580,7 +711,7 @@ export async function GET(req, context) {
     });
 
     // name
-    const nm = signatures[i].name;
+    const nm = toWinAnsiSafeText(signatures[i].name);
     const nmMax = lW - 10;
     const nmSize = fitFontSizeToWidth(nm, fontReg, nmMax, 10.8, 8.2);
     const nmW = fontReg.widthOfTextAtSize(nm, nmSize);
@@ -593,7 +724,7 @@ export async function GET(req, context) {
     });
 
     // role
-    const rl = signatures[i].title;
+    const rl = toWinAnsiSafeText(signatures[i].title);
     const rlSize = 10;
     const rlW = fontItal.widthOfTextAtSize(rl, rlSize);
     page.drawText(rl, {
@@ -616,7 +747,7 @@ export async function GET(req, context) {
   });
 
   // Generated date (subtle)
-  page.drawText(`Generado: ${formatDateField(new Date())}`, {
+  drawSafeText(page, `Generado: ${formatDateField(new Date())}`, {
     x: Mx,
     y: sigBase + 18,
     size: 8.5,
@@ -634,7 +765,7 @@ export async function GET(req, context) {
     const creditX = width - Mx - 100;
 
     page.drawImage(signiaPng, { x: creditX, y: creditY, width: logoW, height: logoH, opacity: 0.92 });
-    page.drawText("Signia", {
+    drawSafeText(page, "Signia", {
       x: creditX + logoW + 6,
       y: creditY + 2,
       size: 8,
@@ -642,7 +773,7 @@ export async function GET(req, context) {
       color: rgb(0.28, 0.32, 0.38),
     });
   } catch {
-    page.drawText("Signia", {
+    drawSafeText(page, "Signia", {
       x: width - Mx - 50,
       y: sigBase + 18,
       size: 8,
@@ -652,12 +783,14 @@ export async function GET(req, context) {
   }
 
   // Output
+  const safeFileName = safeField(user.name).replace(/\W+/g, "_");
   const pdfBytes = await pdfDoc.save();
+
   return new NextResponse(Buffer.from(pdfBytes), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="FichaTecnica_${safeField(user.name).replace(/\W+/g, "_")}.pdf"`,
+      "Content-Disposition": `inline; filename="FichaTecnica_${safeFileName}.pdf"`,
       "Cache-Control": "no-store",
     },
   });

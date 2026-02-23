@@ -1,10 +1,8 @@
-
 "use client";
-import FloatingWhatsappButton from "@/components/FloatingWhatsappButton";
 
 /**
- * LayoutBody now provides only the body wrapper and floating WhatsApp button.
- * Header and landing brand are moved to the home page (app/page.js) for correct scoping.
+ * LayoutBody now provides only the body wrapper.
+ * The FloatingWhatsappButton has been removed.
  */
 export default function LayoutBody({ children, montserrat, fredoka }) {
   return (
@@ -15,7 +13,6 @@ export default function LayoutBody({ children, montserrat, fredoka }) {
       <main className="flex-1 flex flex-col items-center justify-center">
         {children}
       </main>
-      <FloatingWhatsappButton />
     </body>
   );
 }
