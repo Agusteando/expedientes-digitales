@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { sendCandidateRegistrationNotification } from "@/lib/gmail";
 
 // CURP regex (official+2024): 4 letters, 2 digits (YY), month MM, day DD, gender, state, 3 consonants, [A-Z0-9] year sign, check digit
 function validCurp(curp) {
@@ -18,8 +19,9 @@ function validRfc(rfc) {
 
 export async function POST(req) {
   try {
-    const { apellidoPaterno, apellidoMaterno, nombres, email, password, curp, rfc } = await req.json();
+    const { apellidoPaterno, apellidoMaterno, nombres, email, password, curp, rfc, plantelId } = await req.json();
     const errors = {};
+    const normalizedPlantelId = Number(plantelId);
 
     // Validate required split-name fields
     if (!apellidoPaterno || typeof apellidoPaterno !== "string" || apellidoPaterno.trim().length < 2) {
@@ -56,6 +58,9 @@ export async function POST(req) {
     if (!password || typeof password !== "string" || password.length < 7) {
       errors.password = "La contraseña debe tener al menos 7 caracteres.";
     }
+    if (!Number.isInteger(normalizedPlantelId) || normalizedPlantelId <= 0) {
+      errors.plantelId = "Selecciona un plantel válido.";
+    }
 
     if (email && validEmail(email)) {
       const existing = await prisma.user.findUnique({
@@ -67,6 +72,17 @@ export async function POST(req) {
       }
     }
 
+    let plantel = null;
+    if (!errors.plantelId) {
+      plantel = await prisma.plantel.findUnique({
+        where: { id: normalizedPlantelId },
+        select: { id: true, name: true, label: true },
+      });
+      if (!plantel) {
+        errors.plantelId = "Selecciona un plantel válido.";
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       return NextResponse.json({ errors }, { status: 400 });
     }
@@ -75,7 +91,7 @@ export async function POST(req) {
 
     const name = `${apellidoPaterno.trim()} ${apellidoMaterno.trim()} ${nombres.trim()}`;
 
-    await prisma.user.create({
+    const createdUser = await prisma.user.create({
       data: {
         name,
         email: email.toLowerCase(),
@@ -87,8 +103,19 @@ export async function POST(req) {
         apellidoPaterno: apellidoPaterno.trim(),
         apellidoMaterno: apellidoMaterno.trim(),
         nombres: nombres.trim(),
+        plantelId: normalizedPlantelId,
       },
     });
+
+    try {
+      await sendCandidateRegistrationNotification({
+        candidate: createdUser,
+        plantelName: plantel?.label || plantel?.name || "No especificado",
+      });
+    } catch (mailError) {
+      // Notification must not block successful registration.
+      console.error("[REGISTER][NOTIFY_EMAIL_ERROR]", mailError);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {
