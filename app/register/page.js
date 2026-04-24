@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { UserPlusIcon, CheckCircleIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import { useRouter } from "next/navigation";
@@ -21,6 +21,7 @@ function validCurp(curp) {
 
 // Registration Form Step
 function RegisterFormStep({ disabled }) {
+  const [planteles, setPlanteles] = useState([]);
   const [form, setForm] = useState({
     apellidoPaterno: "",
     apellidoMaterno: "",
@@ -30,6 +31,7 @@ function RegisterFormStep({ disabled }) {
     password2: "",
     curp: "",
     rfc: "",
+    plantelId: "",
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const [serverTopError, setServerTopError] = useState("");
@@ -42,6 +44,19 @@ function RegisterFormStep({ disabled }) {
 
   const [touched, setTouched] = useState({});
   const markTouched = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/planteles/list");
+        if (!res.ok) return;
+        const data = await res.json();
+        setPlanteles(Array.isArray(data) ? data : []);
+      } catch {
+        setPlanteles([]);
+      }
+    })();
+  }, []);
 
   // LOCAL FIELD VALIDATION
   function fieldError(field, value = undefined) {
@@ -84,6 +99,9 @@ function RegisterFormStep({ disabled }) {
         if (!val) return "Repite la contraseña.";
         if (val !== form.password) return "Las contraseñas no coinciden.";
         return "";
+      case "plantelId":
+        if (!val) return "Selecciona tu plantel.";
+        return "";
       default:
         return "";
     }
@@ -98,6 +116,7 @@ function RegisterFormStep({ disabled }) {
     rfc: fieldError("rfc"),
     password: fieldError("password"),
     password2: fieldError("password2"),
+    plantelId: fieldError("plantelId"),
   };
 
   function displayFieldError(field) {
@@ -125,6 +144,7 @@ function RegisterFormStep({ disabled }) {
       password2: true,
       curp: true,
       rfc: true,
+      plantelId: true,
     });
     const firstErrorField = Object.keys(localFieldErrors).find(
       (key) => localFieldErrors[key]
@@ -150,6 +170,7 @@ function RegisterFormStep({ disabled }) {
           password: form.password,
           curp: form.curp,
           rfc: form.rfc,
+          plantelId: Number(form.plantelId),
         }),
       });
       const data = await res.json();
@@ -216,6 +237,40 @@ function RegisterFormStep({ disabled }) {
       )}
       <form className="flex flex-col gap-3" onSubmit={handleSubmit} autoComplete="off" noValidate>
         <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <label
+              className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+              htmlFor="plantelId"
+            >
+              Plantel
+            </label>
+            <select
+              className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+                displayFieldError("plantelId")
+                  ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                  : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+              } bg-white dark:bg-gray-800 dark:text-white`}
+              id="plantelId"
+              name="plantelId"
+              required
+              value={form.plantelId}
+              onChange={formChange}
+              onBlur={() => markTouched("plantelId")}
+              aria-invalid={!!displayFieldError("plantelId")}
+            >
+              <option value="">Selecciona tu plantel</option>
+              {planteles.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.label || p.name}
+                </option>
+              ))}
+            </select>
+            {displayFieldError("plantelId") && (
+              <div className="text-xs text-red-600 mt-1">
+                {displayFieldError("plantelId")}
+              </div>
+            )}
+          </div>
           <div className="flex-1">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1" htmlFor="apellidoPaterno">
               Apellido paterno
