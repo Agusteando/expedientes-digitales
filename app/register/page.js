@@ -380,6 +380,43 @@ function RegisterFormStep({ disabled }) {
             </div>
           )}
         </div>
+        <div>
+          <label
+            className="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1"
+            htmlFor="plantelId"
+          >
+            Plantel (obligatorio)
+          </label>
+          <select
+            className={`block w-full rounded-lg border px-3 py-3 text-sm focus:outline-none focus:ring-2 transition ${
+              displayFieldError("plantelId")
+                ? "border-red-400 dark:border-red-500 ring-2 ring-red-200"
+                : "border-gray-200 dark:border-gray-700 focus:ring-cyan-500"
+            } bg-white dark:bg-gray-800 dark:text-white`}
+            id="plantelId"
+            name="plantelId"
+            required
+            disabled={planteles.length === 0}
+            value={form.plantelId}
+            onChange={formChange}
+            onBlur={() => markTouched("plantelId")}
+            aria-invalid={!!displayFieldError("plantelId")}
+          >
+            <option value="">
+              {planteles.length === 0 ? "Cargando planteles..." : "Selecciona tu plantel"}
+            </option>
+            {planteles.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.label || p.name}
+              </option>
+            ))}
+          </select>
+          {displayFieldError("plantelId") && (
+            <div className="text-xs text-red-600 mt-1">
+              {displayFieldError("plantelId")}
+            </div>
+          )}
+        </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <label
